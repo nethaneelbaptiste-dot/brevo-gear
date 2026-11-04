@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>CRM Models</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Alexandria:wght@400;600&family=Inter:wght@400;600&display=swap">
+<style>
+/* Layout: module page of the Brevo Gear hub. Header, one intro band, a grid of tool cards. */
+:root{
+  --bg:#FFFFFF; --surface:#FFFFFF; --surface-off:#F0F0F0; --fg:#1B1B1B; --fg-muted:#474747; --fg-faint:#858585; --line:#CFCFCF;
+  --brand:#004228; --band:#C0FFA5; --band-fg:#002E1E; --tag-bg:#E8FEDF; --tag-fg:#004228; --shadow:rgba(0,0,0,0.12); --focus:#6358DE;
+  --m-crm:#0B996E; --m-crm-fg:#FFFFFF;
+  --font-head:"Alexandria","Inter",system-ui,sans-serif; --font-body:"Inter",system-ui,sans-serif;
+  --r-sm:12px; --r-md:24px; --r-full:9999px;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#1B1B1B; --surface:#002E1E; --surface-off:#262626; --fg:#F0F0F0; --fg-muted:#CFCFCF; --fg-faint:#858585; --line:#474747;
+    --brand:#C0FFA5; --band:#004228; --band-fg:#E8FEDF; --tag-bg:#004228; --tag-fg:#D7FEC8; --shadow:rgba(0,0,0,0.32); --focus:#B3AEEF; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#1B1B1B; --surface:#002E1E; --surface-off:#262626; --fg:#F0F0F0; --fg-muted:#CFCFCF; --fg-faint:#858585; --line:#474747;
+  --brand:#C0FFA5; --band:#004228; --band-fg:#E8FEDF; --tag-bg:#004228; --tag-fg:#D7FEC8; --shadow:rgba(0,0,0,0.32); --focus:#B3AEEF; color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--font-body);font-size:16px;line-height:1.24;letter-spacing:-0.04em;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:40px}
+.wrap{max-width:1200px;margin:0 auto;display:flex;flex-direction:column;gap:32px}
+h1,h2,h3{font-family:var(--font-head);font-weight:600;letter-spacing:-0.04em;text-wrap:balance;margin:0}
+header{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.icon{width:56px;height:56px;border-radius:var(--r-md);background:var(--m-crm);color:var(--m-crm-fg);display:grid;place-items:center;box-shadow:-4px 4px 0 var(--shadow);flex:none}
+.icon svg{width:32px;height:32px}
+h1{font-size:40px;line-height:1.2;color:var(--brand)}
+.kicker{font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:var(--fg-muted);margin:4px 0 0}
+.crumb{font-size:14px;font-weight:600;color:var(--brand);text-decoration:none}
+.crumb:hover{text-decoration:underline}
+.crumb:focus-visible,.card:focus-visible{outline:3px solid var(--focus);outline-offset:3px}
+.intro{background:var(--band);color:var(--band-fg);border-radius:var(--r-md);padding:28px 32px;max-width:760px;box-shadow:-8px 8px 0 var(--shadow)}
+.intro p{margin:0;font-size:20px;line-height:1.24;max-width:60ch}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:24px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-md);padding:24px;display:flex;flex-direction:column;gap:14px;min-width:0;text-decoration:none;color:inherit;box-shadow:-4px 4px 0 var(--shadow);transition:transform .15s ease,box-shadow .15s ease}
+.card:hover{transform:translate(2px,-2px);box-shadow:-8px 8px 0 var(--shadow)}
+.card h3{font-size:24px;line-height:1.2}
+.card p{margin:0;font-size:14px;color:var(--fg-muted);flex:1}
+.tags{display:flex;gap:8px;flex-wrap:wrap}
+.tag{background:var(--tag-bg);color:var(--tag-fg);font-size:12px;font-weight:600;padding:4px 12px;border-radius:var(--r-full)}
+.foot{display:flex;align-items:center;justify-content:space-between;font-size:14px;font-weight:600;color:var(--brand);margin-top:auto}
+.foot svg{width:20px;height:20px}
+.rules{border:1px dashed var(--line);border-radius:var(--r-md);padding:20px 24px;background:var(--surface-off);max-width:760px}
+.rules h2{font-size:16px;margin-bottom:8px}
+.rules ul{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px;font-size:14px;color:var(--fg-muted)}
+footer{padding-top:24px;border-top:1px solid var(--line);font-size:14px;color:var(--fg-faint);text-align:center}
+@media (max-width:520px){h1{font-size:32px}.intro{padding:24px}.intro p{font-size:16px}}
+@media (prefers-reduced-motion:reduce){.card{transition:none}.card:hover{transform:none}}
+</style></head><body>
+<div class="wrap">
+  <header>
+    <div class="icon" aria-hidden="true"><svg viewBox="0 0 48 48" fill="currentColor"><path d="M24 14C19.58 14 16 17.58 16 22C16 27.25 24 34 24 34C24 34 32 27.25 32 22C32 17.58 28.42 14 24 14ZM24 24.5C22.62 24.5 21.5 23.38 21.5 22C21.5 20.62 22.62 19.5 24 19.5C25.38 19.5 26.5 20.62 26.5 22C26.5 23.38 25.38 24.5 24 24.5Z"/></svg></div>
+    <div>
+      <a class="crumb" href="../../index.html">← Brevo Gear</a>
+      <h1>CRM Models</h1>
+      <p class="kicker">Brevo Gear module</p>
+    </div>
+  </header>
+
+  <section class="intro"><p>Tools to compare and align the CRM data model of Brevo accounts: contact attributes today, lists, segments and objects next.</p></section>
+
+  <section class="grid" aria-label="Tools">
+    <a class="card" href="contacts-model-sync.html">
+      <h3>Contacts model replication</h3>
+      <p>Compare the contact attributes of a model account with other sub-accounts, then replicate or fix what you approve. Dry run first, typed confirmation before any delete.</p>
+      <div class="tags"><span class="tag">REST API v3</span><span class="tag">Dry run</span><span class="tag">Demo data</span><span class="tag">Live calls</span></div>
+      <div class="foot"><span>Open tool</span>
+        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
+      </div>
+    </a>
+  </section>
+
+  <section class="rules" aria-label="Before you run">
+    <h2>Before you run</h2>
+    <ul>
+      <li>API keys stay in the tab's memory. Do not paste them in chat.</li>
+      <li>Deleting is offered only on attributes whose type differs, and needs a typed confirmation.</li>
+      <li>Check the rate-limit tier of each account first. The Default tier can answer 429 for minutes.</li>
+    </ul>
+  </section>
+
+  <footer>Powered by Brevo Technology Stack</footer>
+</div>
+</body></html>

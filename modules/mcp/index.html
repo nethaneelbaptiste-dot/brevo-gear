@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>MCP</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Alexandria:wght@400;600&family=Inter:wght@400;600&display=swap">
+<style>
+/* Layout: module page of the Brevo Gear hub. Header, one intro band, a grid of tool cards. */
+:root{
+  --bg:#FFFFFF; --surface:#FFFFFF; --surface-off:#F0F0F0; --fg:#1B1B1B; --fg-muted:#474747; --fg-faint:#858585; --line:#CFCFCF;
+  --brand:#004228; --band:#C0FFA5; --band-fg:#002E1E; --tag-bg:#E8FEDF; --tag-fg:#004228; --shadow:rgba(0,0,0,0.12); --focus:#6358DE;
+  --m-mcp:#004228; --m-mcp-fg:#C0FFA5;
+  --font-head:"Alexandria","Inter",system-ui,sans-serif; --font-body:"Inter",system-ui,sans-serif;
+  --r-sm:12px; --r-md:24px; --r-full:9999px;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#1B1B1B; --surface:#002E1E; --surface-off:#262626; --fg:#F0F0F0; --fg-muted:#CFCFCF; --fg-faint:#858585; --line:#474747;
+    --brand:#C0FFA5; --band:#004228; --band-fg:#E8FEDF; --tag-bg:#004228; --tag-fg:#D7FEC8; --shadow:rgba(0,0,0,0.32); --focus:#B3AEEF; --m-mcp:#C0FFA5; --m-mcp-fg:#002E1E; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#1B1B1B; --surface:#002E1E; --surface-off:#262626; --fg:#F0F0F0; --fg-muted:#CFCFCF; --fg-faint:#858585; --line:#474747;
+  --brand:#C0FFA5; --band:#004228; --band-fg:#E8FEDF; --tag-bg:#004228; --tag-fg:#D7FEC8; --shadow:rgba(0,0,0,0.32); --focus:#B3AEEF; --m-mcp:#C0FFA5; --m-mcp-fg:#002E1E; color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--font-body);font-size:16px;line-height:1.24;letter-spacing:-0.04em;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:40px}
+.wrap{max-width:1200px;margin:0 auto;display:flex;flex-direction:column;gap:32px}
+h1,h2,h3{font-family:var(--font-head);font-weight:600;letter-spacing:-0.04em;text-wrap:balance;margin:0}
+header{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.icon{width:56px;height:56px;border-radius:var(--r-md);background:var(--m-mcp);color:var(--m-mcp-fg);display:grid;place-items:center;box-shadow:-4px 4px 0 var(--shadow);flex:none}
+.icon svg{width:32px;height:32px}
+h1{font-size:40px;line-height:1.2;color:var(--brand)}
+.kicker{font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:var(--fg-muted);margin:4px 0 0}
+.crumb{font-size:14px;font-weight:600;color:var(--brand);text-decoration:none}
+.crumb:hover{text-decoration:underline}
+.crumb:focus-visible,.card:focus-visible{outline:3px solid var(--focus);outline-offset:3px}
+.intro{background:var(--band);color:var(--band-fg);border-radius:var(--r-md);padding:28px 32px;max-width:760px;box-shadow:-8px 8px 0 var(--shadow)}
+.intro p{margin:0;font-size:20px;line-height:1.24;max-width:60ch}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:24px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-md);padding:24px;display:flex;flex-direction:column;gap:14px;min-width:0;text-decoration:none;color:inherit;box-shadow:-4px 4px 0 var(--shadow);transition:transform .15s ease,box-shadow .15s ease}
+.card:hover{transform:translate(2px,-2px);box-shadow:-8px 8px 0 var(--shadow)}
+.card h3{font-size:24px;line-height:1.2}
+.card p{margin:0;font-size:14px;color:var(--fg-muted);flex:1}
+.tags{display:flex;gap:8px;flex-wrap:wrap}
+.tag{background:var(--tag-bg);color:var(--tag-fg);font-size:12px;font-weight:600;padding:4px 12px;border-radius:var(--r-full)}
+.foot{display:flex;align-items:center;justify-content:space-between;font-size:14px;font-weight:600;color:var(--brand);margin-top:auto}
+.foot svg{width:20px;height:20px}
+.rules{border:1px dashed var(--line);border-radius:var(--r-md);padding:20px 24px;background:var(--surface-off);max-width:760px}
+.rules h2{font-size:16px;margin-bottom:8px}
+.rules ul{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px;font-size:14px;color:var(--fg-muted)}
+footer{padding-top:24px;border-top:1px solid var(--line);font-size:14px;color:var(--fg-faint);text-align:center}
+@media (max-width:520px){h1{font-size:32px}.intro{padding:24px}.intro p{font-size:16px}}
+@media (prefers-reduced-motion:reduce){.card{transition:none}.card:hover{transform:none}}
+</style></head><body>
+<div class="wrap">
+  <header>
+    <div class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2v5M15 2v5"/><path d="M6 7h12v4a6 6 0 0 1-12 0V7z"/><path d="M12 17v5"/></svg></div>
+    <div>
+      <a class="crumb" href="../../index.html">← Brevo Gear</a>
+      <h1>MCP</h1>
+      <p class="kicker">Brevo Gear module</p>
+    </div>
+  </header>
+
+  <section class="intro"><p>Tools that talk to the Brevo MCP server: write a prompt, pick one or several accounts, and let Claude run the matching actions.</p></section>
+
+  <section class="grid" aria-label="Tools">
+    <a class="card" href="mcp-prompt-runner.html">
+      <h3>MCP Prompt Runner</h3>
+      <p>Type a prompt and run it on the Brevo MCP server of one or several accounts. Read-only by default; changes are planned first, then approved by you, with a typed confirmation for deletes.</p>
+      <div class="tags"><span class="tag">Brevo MCP</span><span class="tag">Anthropic API</span><span class="tag">Demo data</span></div>
+      <div class="foot"><span>Open tool</span>
+        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
+      </div>
+    </a>
+  </section>
+
+  <section class="rules" aria-label="Before you run">
+    <h2>Before you run</h2>
+    <ul>
+      <li>Create a Restricted key in Brevo (Settings, SMTP &amp; API), give it only the resources you need, switch on "Create MCP server API key", and use the MCP token (starts with eyJ), not the xkeysib- key. Never paste keys in chat.</li>
+      <li>Prompts and everything the tools return are sent to Anthropic's API, and this connector is not eligible for zero data retention. Check your data policy before using real contact data.</li>
+      <li>Read-only mode only attaches read tools. Whether Brevo also refuses writes for a Read-only key is still to be verified with a harmless test.</li>
+      <li>Calls go from your browser to api.anthropic.com and mcp.brevo.com. If a request fails with a network error, check the browser console (CORS) and report it: this has not been verified from this host yet.</li>
+    </ul>
+  </section>
+
+  <footer>Powered by Brevo Technology Stack</footer>
+</div>
+</body></html>

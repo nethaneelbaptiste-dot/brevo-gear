@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>Brevo Gear</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Alexandria:wght@400;600&family=Inter:wght@400;600&display=swap">
+<style>
+/* Layout: content-led internal hub. Modules live under modules/<name>/index.html and each lists its tools.
+   Neutral canvas (60), Forest/Mint (30), one accent per module (10).
+   Brevo brand: Tomato Grotesk is unavailable on Google Fonts, so Alexandria stands in (brand web-safe fallback). */
+:root {
+  --bg: #FFFFFF;
+  --surface: #FFFFFF;
+  --surface-off: #F0F0F0;
+  --fg: #1B1B1B;
+  --fg-muted: #474747;
+  --fg-faint: #858585;
+  --line: #CFCFCF;
+  --brand: #004228;
+  --brand-strong: #0B996E;
+  --band: #C0FFA5;
+  --band-fg: #002E1E;
+  --tag-bg: #E8FEDF;
+  --tag-fg: #004228;
+  --shadow: rgba(0,0,0,0.12);
+  --focus: #6358DE;
+  --m-crm: #0B996E; --m-crm-fg: #FFFFFF;
+  --m-cdp: #1EB8B8; --m-cdp-fg: #1B1B1B;
+  --m-lty: #FDC802; --m-lty-fg: #1B1B1B;
+  --m-wlt: #6358DE; --m-wlt-fg: #FFFFFF;
+  --m-mcp: #004228; --m-mcp-fg: #C0FFA5;
+  --font-head: "Alexandria", "Inter", system-ui, sans-serif;
+  --font-body: "Inter", system-ui, sans-serif;
+  --r-xs: 8px; --r-sm: 12px; --r-md: 24px; --r-full: 9999px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #1B1B1B; --surface: #002E1E; --surface-off: #262626;
+    --fg: #F0F0F0; --fg-muted: #CFCFCF; --fg-faint: #858585; --line: #474747;
+    --brand: #C0FFA5; --brand-strong: #C0FFA5;
+    --band: #004228; --band-fg: #E8FEDF;
+    --tag-bg: #004228; --tag-fg: #D7FEC8;
+    --shadow: rgba(0,0,0,0.32); --focus: #B3AEEF;
+    --m-mcp: #C0FFA5; --m-mcp-fg: #002E1E;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #1B1B1B; --surface: #002E1E; --surface-off: #262626;
+  --fg: #F0F0F0; --fg-muted: #CFCFCF; --fg-faint: #858585; --line: #474747;
+  --brand: #C0FFA5; --brand-strong: #C0FFA5;
+  --band: #004228; --band-fg: #E8FEDF;
+  --tag-bg: #004228; --tag-fg: #D7FEC8;
+  --shadow: rgba(0,0,0,0.32); --focus: #B3AEEF;
+  --m-mcp: #C0FFA5; --m-mcp-fg: #002E1E;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--fg);
+  font-family: var(--font-body); font-size: 16px; line-height: 1.24; letter-spacing: -0.04em;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 40px;
+}
+.wrap { max-width: 1200px; margin: 0 auto; display: flex; flex-direction: column; gap: 40px; min-height: 100%; }
+h1, h2, h3 { font-family: var(--font-head); font-weight: 600; letter-spacing: -0.04em; text-wrap: balance; margin: 0; }
+
+header { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.mark { width: 56px; height: 56px; border-radius: var(--r-md); background: var(--band); color: var(--band-fg); display: grid; place-items: center; box-shadow: -4px 4px 0 var(--shadow); flex: none; }
+.mark svg { width: 32px; height: 32px; }
+h1 { font-size: 40px; line-height: 1.2; color: var(--brand); }
+h1 small { font-family: var(--font-body); font-weight: 400; font-size: 16px; color: var(--fg-faint); margin-left: 8px; letter-spacing: -0.04em; }
+.kicker { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--fg-muted); margin: 4px 0 0; }
+
+.intro { background: var(--band); color: var(--band-fg); border-radius: var(--r-md); padding: 32px; max-width: 760px; box-shadow: -8px 8px 0 var(--shadow); }
+.intro h2 { font-size: 32px; line-height: 1.2; margin-bottom: 12px; }
+.intro p { margin: 0; font-size: 20px; line-height: 1.24; max-width: 60ch; }
+
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: 24px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md); padding: 24px; display: flex; flex-direction: column; gap: 16px; min-width: 0; text-decoration: none; color: inherit; }
+.card.live { box-shadow: -4px 4px 0 var(--shadow); transition: transform .15s ease, box-shadow .15s ease; }
+.card.live:hover { transform: translate(2px, -2px); box-shadow: -8px 8px 0 var(--shadow); }
+.card.live:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
+.card.soon { background: var(--surface-off); border-style: dashed; }
+.icon { width: 48px; height: 48px; border-radius: var(--r-sm); display: grid; place-items: center; flex: none; }
+.icon svg { width: 24px; height: 24px; }
+.top { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+.card h3 { font-size: 24px; line-height: 1.2; }
+.card p { margin: 0; font-size: 14px; color: var(--fg-muted); flex: 1; }
+.tags { display: flex; gap: 8px; flex-wrap: wrap; }
+.tag { background: var(--tag-bg); color: var(--tag-fg); font-size: 12px; font-weight: 600; padding: 4px 12px; border-radius: var(--r-full); }
+.status { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--fg-muted); border: 1px solid var(--line); padding: 2px 8px; border-radius: var(--r-xs); white-space: nowrap; }
+.foot { display: flex; align-items: center; justify-content: space-between; font-size: 14px; font-weight: 600; margin-top: auto; }
+.live .foot { color: var(--brand); }
+.soon .foot { color: var(--fg-faint); font-weight: 400; }
+.foot svg { width: 20px; height: 20px; }
+
+footer { margin-top: auto; padding-top: 24px; border-top: 1px solid var(--line); font-size: 14px; color: var(--fg-faint); text-align: center; }
+@media (max-width: 520px) { h1 { font-size: 32px; } .intro { padding: 24px; } .intro p { font-size: 16px; } }
+@media (prefers-reduced-motion: reduce) { .card.live { transition: none; } .card.live:hover { transform: none; } }
+</style>
+
+</head><body>
+<div class="wrap">
+  <header>
+    <div class="mark" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M19.1 4.9L17 7M7 17l-2.1 2.1"/></svg>
+    </div>
+    <div>
+      <h1>Brevo Gear<small>v1.3</small></h1>
+      <p class="kicker">Internal tooling platform</p>
+    </div>
+  </header>
+
+  <main style="display:flex;flex-direction:column;gap:40px;">
+    <section class="intro">
+      <h2>Welcome to Brevo Gear</h2>
+      <p>Your unified master platform for managing marketing automation, customer data, loyalty programs, and digital wallets.</p>
+    </section>
+
+    <section class="grid" aria-label="Modules">
+      <a class="card live" href="modules/crm/index.html">
+        <div class="icon" style="background:var(--m-crm);color:var(--m-crm-fg)">
+          <svg viewBox="0 0 48 48" fill="currentColor"><path d="M24 14C19.58 14 16 17.58 16 22C16 27.25 24 34 24 34C24 34 32 27.25 32 22C32 17.58 28.42 14 24 14ZM24 24.5C22.62 24.5 21.5 23.38 21.5 22C21.5 20.62 22.62 19.5 24 19.5C25.38 19.5 26.5 20.62 26.5 22C26.5 23.38 25.38 24.5 24 24.5Z"/></svg>
+        </div>
+        <h3>CRM Models</h3>
+        <p>Marketing Automation Platform - Manage campaigns, datamodels, and schemas.</p>
+        <div class="tags"><span class="tag">Configurable</span><span class="tag">REST API</span></div>
+        <div class="foot"><span>Access module</span>
+          <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
+        </div>
+      </a>
+
+      <a class="card live" href="modules/mcp/index.html">
+        <div class="icon" style="background:var(--m-mcp);color:var(--m-mcp-fg)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2v5M15 2v5"/><path d="M6 7h12v4a6 6 0 0 1-12 0V7z"/><path d="M12 17v5"/></svg>
+        </div>
+        <h3>MCP</h3>
+        <p>Brevo MCP server - Run actions on one or several accounts from a prompt, read-only by default.</p>
+        <div class="tags"><span class="tag">Prompt</span><span class="tag">MCP keys</span></div>
+        <div class="foot"><span>Access module</span>
+          <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
+        </div>
+      </a>
+
+      <div class="card soon">
+        <div class="top">
+          <div class="icon" style="background:var(--m-cdp);color:var(--m-cdp-fg)">
+            <svg viewBox="0 0 48 48" fill="currentColor"><path d="M24 14C18.48 14 14 18.48 14 24C14 29.52 18.48 34 24 34C29.52 34 34 29.52 34 24C34 18.48 29.52 14 24 14ZM24 17C25.66 17 27 18.34 27 20C27 21.66 25.66 23 24 23C22.34 23 21 21.66 21 20C21 18.34 22.34 17 24 17ZM24 31.2C21 31.2 18.37 29.55 17 27.15C17.04 24.7 22 23.35 24 23.35C25.99 23.35 30.96 24.7 31 27.15C29.63 29.55 27 31.2 24 31.2Z"/></svg>
+          </div>
+          <span class="status">Coming soon</span>
+        </div>
+        <h3>CDP</h3>
+        <p>Customer Data Platform - Unified customer insights and specific PostgreSQL management.</p>
+        <div class="foot"><span>In development</span></div>
+      </div>
+
+      <div class="card soon">
+        <div class="top">
+          <div class="icon" style="background:var(--m-lty);color:var(--m-lty-fg)">
+            <svg viewBox="0 0 48 48" fill="currentColor"><path d="M24 14L26.76 21.76L34 24L26.76 26.24L24 34L21.24 26.24L14 24L21.24 21.76L24 14Z"/><path d="M30 18L31.18 21.18L34 22L31.18 22.82L30 26L28.82 22.82L26 22L28.82 21.18L30 18Z" opacity="0.7"/></svg>
+          </div>
+          <span class="status">Coming soon</span>
+        </div>
+        <h3>LTY</h3>
+        <p>Loyalty Management - Customer rewards programs and engagement tracking.</p>
+        <div class="foot"><span>Planned</span></div>
+      </div>
+
+      <div class="card soon">
+        <div class="top">
+          <div class="icon" style="background:var(--m-wlt);color:var(--m-wlt-fg)">
+            <svg viewBox="0 0 48 48" fill="currentColor"><rect x="14" y="18" width="20" height="14" rx="2"/><rect x="14" y="16" width="20" height="4" rx="1" opacity="0.7"/><circle cx="17" cy="25" r="1.5" fill="var(--m-wlt)"/></svg>
+          </div>
+          <span class="status">Coming soon</span>
+        </div>
+        <h3>WLT</h3>
+        <p>Digital Wallet - Dematerialized card engine for Apple/Google Wallet integration.</p>
+        <div class="foot"><span>Planned</span></div>
+      </div>
+    </section>
+  </main>
+
+  <footer>Powered by Brevo Technology Stack</footer>
+</div>
+</body></html>

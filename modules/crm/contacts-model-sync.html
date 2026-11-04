@@ -1,0 +1,652 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>Contact Model Sync</title><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap"><style>
+/* Layout: a workbench with four tabs (accounts, comparison, plan and run, history). The comparison matrix is the centerpiece. */
+:root{
+  --bg:#f2f5f4; --surface:#ffffff; --surface2:#e8eeec; --line:#d2dcd8;
+  --fg:#13201b; --muted:#566862; --accent:#0a7d5a; --accent-fg:#ffffff;
+  --ok:#17794a; --ok-bg:#dff2e7; --warn:#8f5700; --warn-bg:#faedcf;
+  --bad:#a8231b; --bad-bg:#fbe0dd; --info:#2352a3; --info-bg:#e0e8f8;
+  --font-body:'IBM Plex Sans',system-ui,sans-serif;
+  --font-mono:'IBM Plex Mono',ui-monospace,monospace;
+  --font-display:'Bricolage Grotesque','IBM Plex Sans',sans-serif;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0e1513; --surface:#151e1b; --surface2:#1d2925; --line:#2b3a35;
+    --fg:#e3ece8; --muted:#8fa39b; --accent:#3dd6a6; --accent-fg:#04231a;
+    --ok:#62d69a; --ok-bg:#183a2a; --warn:#f0b955; --warn-bg:#3b2d10;
+    --bad:#ff8b80; --bad-bg:#42191a; --info:#8fb2ff; --info-bg:#1b2a4a; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0e1513; --surface:#151e1b; --surface2:#1d2925; --line:#2b3a35;
+  --fg:#e3ece8; --muted:#8fa39b; --accent:#3dd6a6; --accent-fg:#04231a;
+  --ok:#62d69a; --ok-bg:#183a2a; --warn:#f0b955; --warn-bg:#3b2d10;
+  --bad:#ff8b80; --bad-bg:#42191a; --info:#8fb2ff; --info-bg:#1b2a4a; color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--fg);font-family:var(--font-body);font-size:14px;line-height:1.5;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 48px}
+.wrap{max-width:1240px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+h1{font-family:var(--font-display);font-size:26px;line-height:1.15;margin:0;letter-spacing:-.01em;text-wrap:balance}
+h2{font-size:15px;margin:0 0 4px;font-weight:600}
+p{margin:0}
+code,.mono{font-family:var(--font-mono);font-size:12.5px}
+.muted{color:var(--muted)}
+header{display:flex;flex-wrap:wrap;gap:12px 24px;align-items:flex-end;justify-content:space-between}
+.lock{display:inline-flex;gap:8px;align-items:center;font-size:12.5px;color:var(--muted);background:var(--surface);border:1px solid var(--line);padding:6px 10px;border-radius:6px}
+.lock b{color:var(--ok);font-weight:600}
+nav{display:flex;gap:4px;flex-wrap:wrap;border-bottom:1px solid var(--line)}
+nav button{background:none;border:0;border-bottom:2px solid transparent;padding:10px 14px;font:inherit;font-weight:500;color:var(--muted);cursor:pointer;margin-bottom:-1px}
+nav button[aria-selected="true"]{color:var(--fg);border-bottom-color:var(--accent)}
+nav .n{font-family:var(--font-mono);font-size:11px;background:var(--surface2);color:var(--muted);padding:1px 6px;border-radius:9px;margin-left:6px}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:18px;display:flex;flex-direction:column;gap:14px;min-width:0}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+button,select,input[type=text],input[type=password],input[type=search]{font:inherit;color:var(--fg)}
+.btn{background:var(--surface2);border:1px solid var(--line);border-radius:6px;padding:8px 14px;cursor:pointer;font-weight:500}
+.btn:hover{border-color:var(--muted)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
+.btn.danger{background:var(--bad);border-color:var(--bad);color:#fff}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn.sm{padding:4px 10px;font-size:12.5px}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+input[type=text],input[type=password],input[type=search],select{background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:8px 10px;min-width:0}
+input[type=password],.keyin{font-family:var(--font-mono)}
+.acct{display:grid;grid-template-columns:minmax(140px,1fr) minmax(200px,2fr) auto auto minmax(160px,1.4fr);gap:10px;align-items:center;padding:10px 0;border-top:1px solid var(--line)}
+.acct:first-of-type{border-top:0}
+.acct .st{font-size:12.5px;min-width:0;overflow-wrap:anywhere}
+.radio{display:flex;gap:6px;align-items:center;white-space:nowrap}
+@media (max-width:760px){.acct{grid-template-columns:1fr 1fr}.acct .st{grid-column:1/-1}}
+.chip{display:inline-block;font-size:11.5px;font-weight:600;padding:2px 8px;border-radius:4px;white-space:nowrap}
+.chip.ok{background:var(--ok-bg);color:var(--ok)}
+.chip.bad{background:var(--bad-bg);color:var(--bad)}
+.chip.warn{background:var(--warn-bg);color:var(--warn)}
+.chip.info{background:var(--info-bg);color:var(--info)}
+.chip.mute{background:var(--surface2);color:var(--muted)}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px}
+.card{border:1px solid var(--line);border-radius:8px;padding:12px;display:flex;flex-direction:column;gap:8px;min-width:0}
+.card .nm{font-weight:600;overflow-wrap:anywhere}
+.counts{display:flex;gap:6px;flex-wrap:wrap}
+.tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:8px;max-width:100%}
+table.mx{border-collapse:collapse;width:100%;min-width:720px}
+.mx th,.mx td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+.mx th{font-size:11.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);background:var(--surface2);position:sticky;top:0}
+.mx td.k,.mx th.k{position:sticky;left:0;background:var(--surface);z-index:1;min-width:190px;border-right:1px solid var(--line)}
+.mx th.k{background:var(--surface2)}
+.mx tr:last-child td{border-bottom:0}
+.sub{font-size:12px;color:var(--muted);margin-top:2px;overflow-wrap:anywhere}
+.pick{display:flex;gap:6px;align-items:center;font-size:12px;margin-top:6px;cursor:pointer}
+.mx td.none{color:var(--muted)}
+.pick.danger{color:var(--bad);font-weight:500}
+.pick input:disabled+*{opacity:.5}
+.bar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:space-between;background:var(--surface2);border-radius:8px;padding:10px 12px}
+.empty{padding:28px 12px;text-align:center;color:var(--muted);display:flex;flex-direction:column;gap:10px;align-items:center}
+.ops{display:flex;flex-direction:column}
+.op{display:grid;grid-template-columns:minmax(120px,1fr) minmax(160px,1.2fr) minmax(120px,2fr) auto;gap:10px;padding:8px 0;border-top:1px solid var(--line);align-items:center}
+.op:first-child{border-top:0}
+.op > *{min-width:0;overflow-wrap:anywhere}
+@media (max-width:700px){.op{grid-template-columns:1fr 1fr}}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.seg button{border:0;background:var(--bg);padding:7px 14px;cursor:pointer;font-weight:500}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-fg)}
+.log{border-top:1px solid var(--line);padding:6px 0;font-size:12.5px}
+.log summary{cursor:pointer;display:grid;grid-template-columns:78px 52px minmax(90px,.8fr) minmax(160px,3fr) auto;gap:10px;align-items:center;list-style:none}
+.log summary > *{min-width:0;overflow-wrap:anywhere}
+.log pre{margin:8px 0 4px;padding:10px;background:var(--bg);border:1px solid var(--line);border-radius:6px;white-space:pre-wrap;overflow-wrap:anywhere;font-family:var(--font-mono);font-size:12px;max-height:260px;overflow:auto}
+@media (max-width:700px){.log summary{grid-template-columns:70px 1fr}}
+textarea{width:100%;min-height:200px;font-family:var(--font-mono);font-size:12px;background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:10px}
+.note{font-size:12.5px;color:var(--muted);background:var(--surface2);padding:8px 12px;border-radius:6px}
+.note.warn{background:var(--warn-bg);color:var(--warn)}
+.note.bad{background:var(--bad-bg);color:var(--bad)}
+#flash{font-size:12.5px;color:var(--ok);min-height:18px}
+@media (prefers-reduced-motion: no-preference){.btn{transition:border-color .15s}}
+</style></head><body><div class="wrap">
+  <header>
+    <div>
+      <a href="index.html" style="font-size:13px;font-weight:600;color:var(--accent);text-decoration:none">← CRM Models</a>
+      <h1>Contact Model Sync</h1>
+      <p class="muted">Compare the contact attributes of a model Brevo account with other sub-accounts, then replicate or fix what you approve. Deleting is possible only for attributes whose type differs, and needs a typed confirmation.</p>
+    </div>
+    <div class="lock" title="API keys are kept in JavaScript memory for this tab only"><b>Keys stay in this tab's memory</b> never written to logs or exports</div>
+  </header>
+
+  <nav role="tablist" id="tabs">
+    <button role="tab" data-tab="accounts" aria-selected="true">1 · Accounts</button>
+    <button role="tab" data-tab="compare" aria-selected="false">2 · Comparison <span class="n" id="n-compare">0</span></button>
+    <button role="tab" data-tab="plan" aria-selected="false">3 · Plan and run <span class="n" id="n-plan">0</span></button>
+    <button role="tab" data-tab="logs" aria-selected="false">4 · History <span class="n" id="n-logs">0</span></button>
+  </nav>
+
+  <section class="panel" id="p-accounts"></section>
+  <section class="panel" id="p-compare" hidden></section>
+  <section class="panel" id="p-plan" hidden></section>
+  <section class="panel" id="p-logs" hidden></section>
+</div>
+
+<script>
+(function(){
+'use strict';
+var BASE='https://api.brevo.com/v3';
+function $(s,r){return (r||document).querySelector(s)}
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
+function sleep(ms){return new Promise(function(r){setTimeout(r,ms)})}
+var uid=0; function nid(){uid++;return 'a'+uid}
+function mask(k){return k?('••••'+String(k).slice(-4)):''}
+
+var S={tab:'accounts',accounts:[],cmp:null,sel:new Set(),filter:'all',onlyDiff:true,q:'',logs:[],logFilter:'all',
+  mode:'dry',confirming:false,ops:[],running:false,stale:false,showReport:false,remember:false,delTyped:''};
+
+/* ---------- accounts ---------- */
+function newAcct(label,isModel){return {id:nid(),label:label||'',key:'',isModel:!!isModel,status:'idle',info:'',attrs:null,demo:false,mock:null}}
+function persist(){
+  try{
+    if(S.remember){sessionStorage.setItem('cms.session',JSON.stringify(S.accounts.map(function(a){return {id:a.id,label:a.label,key:a.key,isModel:a.isModel}})))}
+    else{sessionStorage.removeItem('cms.session')}
+  }catch(e){}
+}
+function restore(){
+  try{
+    var raw=sessionStorage.getItem('cms.session'); if(!raw) return false;
+    var list=JSON.parse(raw); if(!list.length) return false;
+    S.accounts=list.map(function(x){var a=newAcct(x.label,x.isModel);a.key=x.key;return a}); S.remember=true; return true;
+  }catch(e){return false}
+}
+if(!restore()){S.accounts=[newAcct('Model account',true),newAcct('Target 1',false)]}
+
+/* ---------- logging ---------- */
+function saveLogs(){try{sessionStorage.setItem('cms.logs',JSON.stringify(S.logs.slice(-300)))}catch(e){}}
+function loadLogs(){try{var r=sessionStorage.getItem('cms.logs');if(r)S.logs=JSON.parse(r)||[]}catch(e){}}
+function log(level,acct,req,status,ms,body){
+  S.logs.push({id:S.logs.length+1,ts:new Date().toLocaleTimeString('fr-FR'),level:level,acct:acct?acct.label||'(unnamed)':'—',req:req,status:status,ms:ms,body:body});
+  var n=$('#n-logs'); if(n) n.textContent=S.logs.length;
+  saveLogs(); renderLogList();
+}
+function bodyText(d){try{var t=typeof d==='string'?d:JSON.stringify(d,null,2);return t.length>4000?t.slice(0,4000)+'\n… truncated':t}catch(e){return String(d)}}
+
+/* ---------- API layer (public REST API, never logs the key) ---------- */
+function readRl(res){
+  var g=function(n){var v=null;try{v=res.headers.get(n)}catch(e){}return v==null||v===''||isNaN(Number(v))?null:Number(v)};
+  var o={limit:g('x-sib-ratelimit-limit'),remaining:g('x-sib-ratelimit-remaining'),reset:g('x-sib-ratelimit-reset')};
+  o.known=o.limit!=null||o.remaining!=null||o.reset!=null; return o;
+}
+function rlText(o){return o.known?'  [rate limit: '+(o.remaining==null?'?':o.remaining)+'/'+(o.limit==null?'?':o.limit)+' left, reset '+(o.reset==null?'?':o.reset+'s')+']':''}
+async function api(acct,method,path,body,opts){
+  opts=opts||{};
+  var req=method+' '+path+(body?' '+JSON.stringify(body):'');
+  var t0=performance.now();
+  if(acct.demo){
+    await sleep(110);
+    var rm=mockApi(acct,method,path,body);
+    var msd=Math.round(performance.now()-t0);
+    log(rm.ok?'ok':'error',acct,req+'  [demo]',rm.status,msd,rm.data);
+    return rm;
+  }
+  try{
+    var headers={'api-key':acct.key,'accept':'application/json'};
+    if(body) headers['content-type']='application/json';
+    var res=await fetch(BASE+path,{method:method,headers:headers,body:body?JSON.stringify(body):undefined});
+    var tried=opts.n||0, rl=readRl(res);
+    var resetMs=rl.reset!=null?rl.reset*1000:0;
+    if(res.status===429&&tried<3&&resetMs<=60000){
+      var wait=Math.max(resetMs,2000*Math.pow(2,tried))+Math.round(Math.random()*400);
+      log('warn',acct,req+rlText(rl),429,Math.round(performance.now()-t0),'Rate limited. Waiting '+wait+' ms before retry '+(tried+1)+'/3'+(rl.known?' (Brevo asked for '+rl.reset+' s).':' (rate limit headers not readable from the browser, using backoff).'));
+      await sleep(wait); return api(acct,method,path,body,{n:tried+1});
+    }
+    if(res.status===429&&resetMs>60000){
+      log('warn',acct,req+rlText(rl),429,Math.round(performance.now()-t0),'Not waiting: the limit resets in '+Math.round(resetMs/1000)+' s. Run again after that.');
+    }
+    if(res.ok&&rl.remaining!=null&&rl.remaining<5&&rl.reset!=null&&rl.reset<=60){
+      log('info',acct,'Throttle: '+rl.remaining+' requests left, pausing '+rl.reset+' s','—',0,'Staying under the limit reported by Brevo');
+      await sleep(rl.reset*1000+200);
+    }
+    var txt=await res.text(); var data=txt; try{data=txt?JSON.parse(txt):{}}catch(e){}
+    var ms=Math.round(performance.now()-t0);
+    var shown=(path==='/account'&&res.ok&&data&&typeof data==='object')?{companyName:data.companyName}:data;
+    log(res.ok?'ok':'error',acct,req+'  (api-key '+mask(acct.key)+')'+rlText(rl),res.status,ms,(res.status===429&&!rl.known)?{response:shown,note:'Rate limit headers are not readable from this page (CORS) or were not sent.'}:shown);
+    return {ok:res.ok,status:res.status,data:data};
+  }catch(e){
+    var ms2=Math.round(performance.now()-t0);
+    var msg='Network error: the browser blocked or could not complete the request (CORS, sandbox policy or offline). If this page is hosted (an artifact), it cannot reach Brevo: open the standalone file from the Brevo Gear project (CRM Models, Brevo Contacts model replication, assets) on your computer instead.';
+    log('error',acct,req,'ERR',ms2,msg);
+    return {ok:false,status:0,data:{message:msg}};
+  }
+}
+
+/* ---------- demo data ---------- */
+function clone(x){return JSON.parse(JSON.stringify(x))}
+function demoAccounts(){
+  var n=function(name,type){return {name:name,category:'normal',type:type}};
+  var cat=function(name,labels){return {name:name,category:'category',enumeration:labels.map(function(l,i){return {value:i+1,label:l}})}};
+  var base=[n('FIRSTNAME','text'),n('LASTNAME','text'),n('SMS','text')];
+  var model=base.concat([n('BIRTHDATE','date'),n('CITY','text'),n('LOYALTY_POINTS','float'),n('NEWSLETTER_OPT_IN','boolean'),
+    cat('PREFERRED_STORE',['Paris','Lyon','Online']),cat('CUSTOMER_TYPE',['B2C','B2B']),n('LAST_PURCHASE_DATE','date'),n('CRM_ID','text'),{name:'INTERESTS',category:'normal',type:'multiple-choice',multiCategoryOptions:['Fashion','Sport','Travel']},
+    {name:'LIFETIME_VALUE',category:'calculated',calculatedValue:'SUM[ORDER_TOTAL]'}]);
+  var a=base.concat([n('BIRTHDATE','date'),n('CITY','text'),n('LOYALTY_POINTS','text'),n('NEWSLETTER_OPTIN','boolean'),
+    cat('PREFERRED_STORE',['Paris','Lyon']),cat('CUSTOMER_TYPE',['B2C','B2B']),n('EXT_SOURCE','text')]);
+  var b=base.concat([n('CITY','text'),n('LAST_PURCHASE_DATE','date'),n('CRM_ID','text'),n('BIRTH_DATE','date'),n('LOYALTYPOINTS','float'),n('TIER','text')]);
+  var m=newAcct('Model – France',true),ta=newAcct('Target – Spain',false),tb=newAcct('Target – Germany',false);
+  [[m,model],[ta,a],[tb,b]].forEach(function(p){p[0].demo=true;p[0].key='demo';p[0].mock=clone(p[1])});
+  return [m,ta,tb];
+}
+function mockApi(acct,method,path,body){
+  if(path==='/account') return {ok:true,status:200,data:{companyName:acct.label+' (demo)',email:'demo@example.com'}};
+  if(path==='/contacts/attributes'&&method==='GET') return {ok:true,status:200,data:{attributes:clone(acct.mock)}};
+  var m=path.match(/^\/contacts\/attributes\/([a-z]+)\/([^/]+)$/);
+  if(m&&method==='POST'){
+    var name=decodeURIComponent(m[2]);
+    if(acct.mock.some(function(x){return x.name===name})) return {ok:false,status:400,data:{code:'invalid_parameter',message:'Attribute already exists'}};
+    if(name==='CRM_ID'&&acct.label.indexOf('Spain')>-1) return {ok:false,status:400,data:{code:'invalid_parameter',message:'Demo error: attribute quota reached'}};
+    if(m[1]==='category'&&(!body||body.type!=='category')) return {ok:false,status:400,data:{code:'missing_parameter',message:'Missing attribute type'}};
+    if(body&&body.type==='multiple-choice'&&!(body.multiCategoryOptions&&body.multiCategoryOptions.length)) return {ok:false,status:400,data:{code:'missing_parameter',message:'Please provide mandatory field: options for type as category'}};
+    var at={name:name,category:m[1]}; if(body&&body.type) at.type=body.type; if(body&&body.enumeration) at.enumeration=body.enumeration; if(body&&body.multiCategoryOptions) at.multiCategoryOptions=body.multiCategoryOptions;
+    acct.mock.push(at); return {ok:true,status:201,data:{}};
+  }
+  var d=path.match(/^\/contacts\/attributes\/([a-z]+)\/([^/]+)$/);
+  if(d&&(method==='DELETE'||method==='PUT')){
+    var nm=decodeURIComponent(d[2]),ix=-1;
+    acct.mock.forEach(function(x,i){if(x.name===nm&&x.category===d[1])ix=i});
+    if(ix<0) return {ok:false,status:404,data:{code:'document_not_found',message:'Attribute does not exist'}};
+    if(method==='DELETE'){acct.mock.splice(ix,1);return {ok:true,status:204,data:{}}}
+    if(body&&body.enumeration)acct.mock[ix].enumeration=body.enumeration;
+    if(body&&body.multiCategoryOptions)acct.mock[ix].multiCategoryOptions=body.multiCategoryOptions;
+    if(body&&body.value!==undefined)acct.mock[ix].calculatedValue=body.value;
+    return {ok:true,status:204,data:{}};
+  }
+  return {ok:false,status:404,data:{message:'Not found (demo)'}};
+}
+
+/* ---------- loading attributes ---------- */
+async function loadAll(){
+  var list=S.accounts.filter(function(a){return a.key.trim()});
+  if(list.length<2){flash('Enter at least two API keys.');return}
+  if(S.accounts.filter(function(a){return a.isModel}).length!==1){flash('Pick exactly one model account.');return}
+  $('#loadBtn').disabled=true;
+  for(var i=0;i<list.length;i++){
+    var a=list[i]; a.status='loading'; a.info='Loading…'; renderAccounts();
+    var acc=await api(a,'GET','/account');
+    if(!acc.ok){a.status='error';a.info=(acc.data&&acc.data.message)||('HTTP '+acc.status);a.attrs=null;renderAccounts();continue}
+    var r=await api(a,'GET','/contacts/attributes');
+    if(!r.ok||!r.data||!r.data.attributes){a.status='error';a.info=(r.data&&r.data.message)||('HTTP '+r.status);a.attrs=null;renderAccounts();continue}
+    a.attrs=r.data.attributes; a.status='ok'; a.info=(acc.data.companyName||'Account')+' · '+a.attrs.length+' attributes'; renderAccounts();
+  }
+  S.stale=false; S.sel=new Set(); S.ops=[]; S.confirming=false;
+  buildCompare(); renderAccounts(); renderCompare(); renderPlan();
+  if(S.cmp){S.tab='compare';showTab()}
+  var d=document.getElementById('loadBtn'); if(d) d.disabled=false;
+}
+
+/* ---------- comparison engine ---------- */
+function norm(s){return String(s).normalize('NFD').replace(/[̀-ͯ]/g,'').toUpperCase().replace(/[^A-Z0-9]/g,'')}
+function lev(a,b){
+  var m=a.length,n=b.length,d=[],i,j;
+  for(i=0;i<=m;i++){d[i]=[i]} for(j=1;j<=n;j++){d[0][j]=j}
+  for(i=1;i<=m;i++){for(j=1;j<=n;j++){d[i][j]=Math.min(d[i-1][j]+1,d[i][j-1]+1,d[i-1][j-1]+(a[i-1]===b[j-1]?0:1))}}
+  return d[m][n];
+}
+function sim(a,b){var x=norm(a),y=norm(b);if(!x.length||!y.length)return 0;return 1-lev(x,y)/Math.max(x.length,y.length)}
+function typeOf(a){return a.category==='category'?'category':(a.type||'?')}
+function sig(a){return a.category+'/'+typeOf(a)}
+function inScope(a){return a.category==='normal'||a.category==='category'}
+function labelSet(a){return (a.enumeration||[]).map(function(e){return norm(e.label)})}
+function judge(m,t){
+  if(m.category!==t.category||typeOf(m)!==typeOf(t)) return {status:'type',ta:t,detail:sig(t)+' here, '+sig(m)+' in model'};
+  if(m.category==='normal'&&m.type==='multiple-choice'){
+    var hv=(t.multiCategoryOptions||[]).map(norm),ms=(m.multiCategoryOptions||[]).filter(function(o){return hv.indexOf(norm(o))<0});
+    if(ms.length) return {status:'enum',ta:t,detail:'missing options: '+ms.join(', ')};
+  }
+  if(m.category==='category'){
+    var have=labelSet(t),miss=(m.enumeration||[]).filter(function(e){return have.indexOf(norm(e.label))<0}).map(function(e){return e.label});
+    if(miss.length) return {status:'enum',ta:t,detail:'missing options: '+miss.join(', ')};
+  }
+  if((m.category==='calculated'||m.category==='global')&&(m.calculatedValue||'')!==(t.calculatedValue||'')) return {status:'formula',ta:t,detail:'formula differs'};
+  return {status:'match',ta:t};
+}
+function buildCompare(){
+  var model=S.accounts.filter(function(a){return a.isModel&&a.attrs})[0];
+  var targets=S.accounts.filter(function(a){return !a.isModel&&a.attrs});
+  if(!model||!targets.length){S.cmp=null;return}
+  var mnames={}; model.attrs.forEach(function(m){mnames[m.name]=1});
+  var cells={}, extras={};
+  targets.forEach(function(t){
+    var by={}; t.attrs.forEach(function(x){by[x.name]=x}); var used={}; cells[t.id]={};
+    model.attrs.forEach(function(m){ if(by[m.name]){used[m.name]=1;cells[t.id][m.name]=judge(m,by[m.name])} });
+    model.attrs.forEach(function(m){
+      if(cells[t.id][m.name]) return;
+      var best=null,bs=0;
+      t.attrs.forEach(function(x){
+        if(used[x.name]||mnames[x.name]) return;
+        var s=norm(x.name)===norm(m.name)?1:sim(x.name,m.name);
+        if(s>=0.82&&s>bs&&x.category===m.category){best=x;bs=s}
+      });
+      if(best){used[best.name]=1;var j=judge(m,best);cells[t.id][m.name]={status:'similar',ta:best,score:bs,detail:j.status==='match'?'':j.detail,actionable:inScope(m)}}
+      else{cells[t.id][m.name]={status:'missing',actionable:inScope(m)}}
+    });
+    t.attrs.forEach(function(x){ if(!used[x.name]){ extras[x.name]=extras[x.name]||{}; extras[x.name][t.id]={status:'extra',ta:x} } });
+    Object.keys(cells[t.id]).forEach(function(k){var c=cells[t.id][k]; if(c.status==='missing'||c.status==='similar'){c.actionable=inScope(model.attrs.filter(function(m){return m.name===k})[0])}});
+  });
+  S.cmp={model:model,targets:targets,cells:cells,extras:extras};
+}
+function statusCounts(tid){
+  var out={match:0,missing:0,similar:0,type:0,enum:0,formula:0,extra:0};
+  var c=S.cmp.cells[tid]; Object.keys(c).forEach(function(k){out[c[k].status]++});
+  Object.keys(S.cmp.extras).forEach(function(k){if(S.cmp.extras[k][tid])out.extra++});
+  return out;
+}
+
+/* ---------- rendering: accounts ---------- */
+var ST={match:['In sync','ok'],missing:['Missing','bad'],similar:['Probable match','info'],type:['Type differs','warn'],enum:['Options differ','warn'],formula:['Formula differs','warn'],extra:['Account-only','mute']};
+function chip(st){var x=ST[st];return '<span class="chip '+x[1]+'">'+x[0]+'</span>'}
+function isHosted(){try{return /(claudeusercontent\.com|claude\.ai)$/.test(location.hostname)}catch(e){return false}}
+function renderAccounts(){
+  var el=$('#p-accounts'); if(!el) return;
+  var rows=S.accounts.map(function(a){
+    var st=a.status==='ok'?'<span class="chip ok">Loaded</span> '+esc(a.info):a.status==='error'?'<span class="chip bad">Failed</span> '+esc(a.info):a.status==='loading'?esc(a.info):'<span class="muted">Not loaded yet</span>';
+    return '<div class="acct" data-id="'+a.id+'">'+
+      '<input type="text" data-f="label" placeholder="Account name" aria-label="Account name" value="'+esc(a.label)+'" id="lb-'+a.id+'">'+
+      '<input type="password" class="keyin" data-f="key" placeholder="xkeysib-…" autocomplete="off" spellcheck="false" aria-label="API key" value="'+esc(a.key)+'" id="ky-'+a.id+'">'+
+      '<label class="radio"><input type="radio" name="model" data-f="model" '+(a.isModel?'checked':'')+'> Model</label>'+
+      '<button class="btn sm" data-act="rm">Remove</button>'+
+      '<div class="st">'+st+'</div></div>';
+  }).join('');
+  el.innerHTML=
+    (isHosted()?'<div class="note warn"><b>This copy is running as a hosted page.</b> Its sandbox blocks calls to api.brevo.com, so real accounts will fail here. Demo data works. For real accounts use the Brevo Gear site (GitHub Pages) or open the file locally.</div>':'')+
+    '<div><h2>Accounts</h2><p class="muted">Add one API key per Brevo sub-account (v3 keys). Choose which account is the model. Keys are used only to call the Brevo API from this browser tab.</p></div>'+
+    '<div>'+rows+'</div>'+
+    '<div class="row"><button class="btn" data-act="add">Add account</button>'+
+    '<button class="btn primary" id="loadBtn" data-act="load">Load attributes and compare</button>'+
+    '<button class="btn" data-act="demo">Try with demo data</button>'+
+    '<button class="btn" data-act="clear">Clear keys</button></div>'+
+    '<label class="radio muted"><input type="checkbox" id="remember" '+(S.remember?'checked':'')+'> Keep keys for this tab session only (sessionStorage, cleared when the tab closes)</label>'+
+    '<div id="flash" role="status"></div>';
+}
+function flash(msg){var f=$('#flash');if(f){f.textContent=msg;setTimeout(function(){if(f.textContent===msg)f.textContent=''},4000)}}
+
+/* ---------- rendering: comparison ---------- */
+function rowsModel(){
+  var c=S.cmp, rows=[];
+  c.model.attrs.forEach(function(m){rows.push({name:m.name,m:m})});
+  Object.keys(c.extras).sort().forEach(function(k){rows.push({name:k,m:null})});
+  return rows;
+}
+function cellFor(row,t){
+  if(row.m) return S.cmp.cells[t.id][row.name];
+  var e=S.cmp.extras[row.name]; return e&&e[t.id]?e[t.id]:{status:'none'};
+}
+function renderCompare(){
+  var el=$('#p-compare'); $('#n-compare').textContent=S.cmp?S.cmp.targets.length:0;
+  if(!S.cmp){el.innerHTML='<div class="empty"><p>Load attributes from the model and at least one other account to see the comparison.</p><button class="btn primary" data-act="goaccounts">Go to accounts</button></div>';return}
+  var cards=S.cmp.targets.map(function(t){
+    var c=statusCounts(t.id),chips=['match','missing','similar','type','enum','formula','extra'].filter(function(k){return c[k]}).map(function(k){return '<span class="chip '+ST[k][1]+'">'+c[k]+' '+ST[k][0].toLowerCase()+'</span>'}).join('');
+    var nm=Object.keys(S.cmp.cells[t.id]).filter(function(k){var x=S.cmp.cells[t.id][k];return x.status==='missing'&&x.actionable}).length;
+    return '<div class="card"><div class="nm">'+esc(t.label)+'</div><div class="counts">'+chips+'</div>'+
+      '<div class="row"><button class="btn sm" data-act="selmiss" data-t="'+t.id+'"'+(nm?'':' disabled')+'>Approve all '+nm+' missing</button></div></div>';
+  }).join('');
+  el.innerHTML=
+    '<div><h2>Model: '+esc(S.cmp.model.label)+'</h2><p class="muted">'+S.cmp.model.attrs.length+' attributes in the model. Tick a cell to approve replicating that attribute into that account. Probable matches are skipped unless you tick “create anyway”. Calculated, global and transformed attributes are compared but not replicated.</p></div>'+
+    '<div class="cards">'+cards+'</div>'+
+    '<div class="row"><input type="search" id="q" placeholder="Search attribute" aria-label="Search attribute" value="'+esc(S.q)+'">'+
+    '<select id="flt" aria-label="Filter by status"><option value="all">All statuses</option>'+Object.keys(ST).map(function(k){return '<option value="'+k+'"'+(S.filter===k?' selected':'')+'>'+ST[k][0]+'</option>'}).join('')+'</select>'+
+    '<label class="radio"><input type="checkbox" id="onlydiff" '+(S.onlyDiff?'checked':'')+'> Only differences</label>'+
+    '<button class="btn sm" data-act="report">'+(S.showReport?'Hide report':'Documented report (Markdown)')+'</button></div>'+
+    '<div id="report"></div>'+
+    '<div class="tablewrap"><table class="mx" id="mx"></table></div>'+
+    '<div class="bar"><span id="selinfo"></span><div class="row"><button class="btn sm" data-act="clearsel">Clear approvals</button><button class="btn primary" data-act="toplan">Review plan</button></div></div>';
+  renderMx(); renderReport(); updateSel();
+}
+function isMulti(a){return a.category==='normal'&&a.type==='multiple-choice'}
+function canUpdate(m,t){return m.category===t.category&&(m.category==='category'||m.category==='calculated'||m.category==='global'||(isMulti(m)&&isMulti(t)))}
+function tick(key,label,cls,dis){return '<label class="pick '+(cls||'')+'"><input type="checkbox" data-k="'+esc(key)+'" '+(S.sel.has(key)?'checked':'')+(dis?' disabled':'')+'><span>'+label+'</span></label>'}
+function pickHtml(x,t,r){
+  if(!r.m) return '';
+  var b=t.id+'|'+r.name+'|';
+  if(x.status==='missing'&&x.actionable) return tick(b+'create','replicate');
+  if(x.status==='similar'&&x.actionable) return tick(b+'create','create anyway');
+  if(x.status==='type') return tick(b+'delete','delete (irreversible)','danger')+tick(b+'create','then recreate from model','',!(S.sel.has(b+'delete')&&inScope(r.m)));
+  if((x.status==='enum'||x.status==='formula')&&canUpdate(r.m,x.ta)) return tick(b+'update','update values from model');
+  return '';
+}
+function renderMx(){
+  var c=S.cmp; if(!c) return; var q=norm(S.q);
+  var head='<thead><tr><th class="k">Attribute</th><th>Model</th>'+c.targets.map(function(t){return '<th>'+esc(t.label)+'</th>'}).join('')+'</tr></thead>';
+  var body=rowsModel().filter(function(r){
+    if(q&&norm(r.name).indexOf(q)<0) return false;
+    var cs=c.targets.map(function(t){return cellFor(r,t)});
+    if(S.onlyDiff&&cs.every(function(x){return x.status==='match'})) return false;
+    if(S.filter!=='all'&&!cs.some(function(x){return x.status===S.filter})) return false;
+    return true;
+  }).map(function(r){
+    var mcell=r.m?'<td><span class="mono">'+esc(sig(r.m))+'</span>'+(r.m.category==='category'?'<div class="sub">'+esc((r.m.enumeration||[]).map(function(e){return e.label}).join(', '))+'</div>':'')+(isMulti(r.m)?'<div class="sub">'+esc((r.m.multiCategoryOptions||[]).join(', '))+'</div>':'')+(r.m.calculatedValue?'<div class="sub">'+esc(r.m.calculatedValue)+'</div>':'')+'</td>':'<td class="none">—</td>';
+    var tds=c.targets.map(function(t){
+      var x=cellFor(r,t); if(x.status==='none') return '<td class="none">—</td>';
+      var sub='';
+      if(x.status==='similar') sub='<div class="sub">as <code>'+esc(x.ta.name)+'</code> · '+Math.round(x.score*100)+'%'+(x.detail?' · '+esc(x.detail):'')+'</div>';
+      else if(x.detail) sub='<div class="sub">'+esc(x.detail)+'</div>';
+      else if(x.status==='extra') sub='<div class="sub">'+esc(sig(x.ta))+'</div>';
+      else if(x.status==='missing'&&!x.actionable) sub='<div class="sub">not replicated ('+esc(r.m.category)+')</div>';
+      var pick=pickHtml(x,t,r);
+      return '<td>'+chip(x.status)+sub+pick+'</td>';
+    }).join('');
+    return '<tr><td class="k"><span class="mono">'+esc(r.name)+'</span>'+(r.m?'':'<div class="sub">not in model</div>')+'</td>'+mcell+tds+'</tr>';
+  }).join('');
+  $('#mx').innerHTML=head+'<tbody>'+(body||'<tr><td colspan="'+(c.targets.length+2)+'" class="none">No attribute matches this filter.</td></tr>')+'</tbody>';
+}
+function updateSel(){
+  var n=S.sel.size, i=$('#selinfo'); if(i) i.textContent=n+' attribute'+(n===1?'':'s')+' approved for replication';
+  $('#n-plan').textContent=n;
+}
+function reportMd(){
+  var c=S.cmp, d=new Date().toISOString().slice(0,10);
+  var out=['# Contact attributes comparison','','Model: **'+c.model.label+'** ('+c.model.attrs.length+' attributes) · generated '+d+'','','## Summary',''];
+  out.push('| Account | In sync | Missing | Probable match | Type differs | Options differ | Formula differs | Account-only |');
+  out.push('|---|---|---|---|---|---|---|---|');
+  c.targets.forEach(function(t){var k=statusCounts(t.id);out.push('| '+t.label+' | '+[k.match,k.missing,k.similar,k.type,k.enum,k.formula,k.extra].join(' | ')+' |')});
+  out.push('','## Differences','');
+  out.push('| Attribute | Model | '+c.targets.map(function(t){return t.label}).join(' | ')+' |');
+  out.push('|---|---|'+c.targets.map(function(){return '---'}).join('|')+'|');
+  rowsModel().forEach(function(r){
+    var cs=c.targets.map(function(t){return cellFor(r,t)});
+    if(cs.every(function(x){return x.status==='match'})) return;
+    var cols=cs.map(function(x){
+      if(x.status==='none') return '—';
+      var s=ST[x.status][0]; if(x.status==='similar') s+=' (as '+x.ta.name+')'; if(x.detail) s+=' — '+x.detail; return s;
+    });
+    out.push('| '+r.name+' | '+(r.m?sig(r.m):'—')+' | '+cols.join(' | ')+' |');
+  });
+  return out.join('\n');
+}
+function renderReport(){
+  var r=$('#report'); if(!r) return;
+  if(!S.showReport){r.innerHTML='';return}
+  r.innerHTML='<textarea id="reptext" readonly aria-label="Markdown report"></textarea><div class="row" style="margin-top:8px"><button class="btn sm" data-act="copyrep">Copy report</button></div>';
+  $('#reptext').value=reportMd();
+}
+function copyText(txt,ta){
+  var done=function(){flash('Copied.')};
+  if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(txt).then(done,function(){if(ta){ta.select();flash('Select and copy manually.')}})}
+  else if(ta){ta.select();flash('Select and copy manually.')}
+}
+
+/* ---------- plan and run ---------- */
+function buildOps(){
+  var ops=[]; if(!S.cmp) return ops;
+  S.sel.forEach(function(k){
+    var p=k.split('|'),tid=p[0],act=p[p.length-1],name=p.slice(1,-1).join('|');
+    var t=S.cmp.targets.filter(function(x){return x.id===tid})[0];
+    var m=S.cmp.model.attrs.filter(function(x){return x.name===name})[0];
+    if(!t||!m) return;
+    var cur=t.attrs.filter(function(x){return x.name===name})[0];
+    var base={id:k,tid:tid,target:t,name:name,status:'pending',msg:'',warn:''};
+    var multiBody=function(){return {multiCategoryOptions:(m.multiCategoryOptions||[]).slice()}};
+    var enumBody=function(){return {enumeration:(m.enumeration||[]).map(function(e){return {value:e.value,label:e.label}})}};
+    if(act==='delete'){
+      if(!cur) return;
+      base.kind='delete';base.category=cur.category;base.body=null;base.warn='Irreversible: removes the attribute and its values for every contact';ops.push(base);return;
+    }
+    if(act==='update'){
+      if(!cur||!canUpdate(m,cur)) return;
+      base.kind='update';base.category=cur.category;
+      base.body=isMulti(m)?multiBody():m.category==='category'?enumBody():{value:m.calculatedValue||''};
+      if(isMulti(m)){
+        var kp=(m.multiCategoryOptions||[]).map(norm),dr=(cur.multiCategoryOptions||[]).filter(function(o){return kp.indexOf(norm(o))<0});
+        if(dr.length) base.warn='Options not in the model will be dropped: '+dr.join(', ');
+      }
+      if(m.category==='category'){
+        var keep=labelSet(m),drop=(cur.enumeration||[]).filter(function(e){return keep.indexOf(norm(e.label))<0}).map(function(e){return e.label});
+        if(drop.length) base.warn='Options not in the model will be dropped: '+drop.join(', ');
+      }
+      ops.push(base);return;
+    }
+    if(cur&&!S.sel.has(tid+'|'+name+'|delete')) return;
+    base.kind='create';base.category=m.category;
+    base.body=m.category==='category'?Object.assign({type:'category'},enumBody()):isMulti(m)?Object.assign({type:'multiple-choice'},multiBody()):{type:m.type||'text'};
+    if(m.category==='category'){var vs=(m.enumeration||[]).map(function(e){return e.value});if(vs.some(function(v,i){return v===0||vs.indexOf(v)!==i}))base.warn='Model option values are 0 or duplicated (non-integer values in Brevo); check the options after creation'}
+    ops.push(base);
+  });
+  var rank={'delete':0,update:1,create:2};
+  ops.sort(function(a,b){return a.target.label.localeCompare(b.target.label)||rank[a.kind]-rank[b.kind]||a.name.localeCompare(b.name)});
+  return ops;
+}
+function renderPlan(){
+  var el=$('#p-plan'); if(!el) return;
+  if(!S.cmp){el.innerHTML='<div class="empty"><p>Nothing to run yet. Load and compare accounts first.</p></div>';return}
+  if(!S.running) S.ops=S.ops.length&&S.ops.some(function(o){return o.status!=='pending'})?S.ops:buildOps();
+  var n=S.ops.length;
+  var rows=S.ops.map(function(o){
+    var cls=o.status==='done'?'ok':o.status==='error'?'bad':o.status==='skipped'||o.status==='dry'?'info':'mute';
+    var label={pending:'Pending',done:{'delete':'Deleted',update:'Updated',create:'Created'}[o.kind],error:'Failed',skipped:'Skipped',dry:'Dry run OK',running:'Running…'}[o.status];
+    var kc={'delete':'bad',update:'warn',create:'ok'}[o.kind];
+    return '<div class="op"><div>'+esc(o.target.label)+'</div><div><span class="chip '+kc+'">'+o.kind+'</span> <span class="mono">'+esc(o.name)+'</span></div><div class="sub mono">'+esc(o.category+(o.body?' '+JSON.stringify(o.body):''))+(o.warn?'<br><b>'+esc(o.warn)+'</b>':'')+(o.msg?'<br>'+esc(o.msg)+'':'')+'</div><span class="chip '+cls+'">'+label+'</span></div>';
+  }).join('');
+  var live=S.mode==='live';
+  var nDel=S.ops.filter(function(o){return o.kind==='delete'}).length;
+  var runLabel=S.running?'Running…':S.confirming?('Confirm: apply '+n+' change'+(n===1?'':'s')):(live?'Run live':'Run dry run');
+  el.innerHTML=
+    '<div><h2>Plan and run</h2><p class="muted">Each ticked cell becomes one request: create, update values, or delete. Deletes run first and remove the attribute and its values for every contact. Requests run one at a time.</p></div>'+
+    '<div class="row"><div class="seg" role="group" aria-label="Mode"><button data-act="mode" data-m="dry" aria-pressed="'+(!live)+'">Dry run</button><button data-act="mode" data-m="live" aria-pressed="'+live+'">Live</button></div>'+
+    '<span class="muted">'+(live?'Live: attributes will be created in the target accounts.':'Dry run: requests are logged but not sent.')+'</span></div>'+
+    (n?'<div class="ops">'+rows+'</div>':'<div class="empty"><p>No attributes approved. Tick cells in the comparison to build a plan.</p><button class="btn" data-act="gocompare">Back to comparison</button></div>')+
+    (S.stale?'<div class="note warn">Accounts changed. Reload attributes to verify the result and refresh the comparison.</div>':'')+
+    (S.confirming&&nDel?'<div class="note bad"><b>'+nDel+' deletion'+(nDel===1?'':'s')+' ahead.</b> Each removes an attribute and every value stored in it, for all contacts of that account. Type DELETE to enable the button. <input type="text" id="delconfirm" autocomplete="off" aria-label="Type DELETE to confirm" value="'+esc(S.delTyped)+'" style="margin-left:8px;width:120px"></div>':'')+
+    '<div class="row"><button class="btn '+(live?'danger':'primary')+'" data-act="run" '+((!n||S.running||(S.confirming&&nDel&&S.delTyped!=='DELETE'))?'disabled':'')+'>'+runLabel+'</button>'+
+    (S.confirming?'<button class="btn" data-act="cancelrun">Cancel</button>':'')+
+    '<button class="btn" data-act="reload">Reload and re-compare</button></div>';
+}
+async function runPlan(){
+  S.running=true; S.confirming=false; S.delTyped=''; renderPlan();
+  var gone={},failed={};
+  var skip=function(o,msg){o.status='skipped';o.msg=msg;log('warn',o.target,o.kind.toUpperCase()+' '+o.name,'—',0,msg);renderPlan()};
+  for(var i=0;i<S.ops.length;i++){
+    var o=S.ops[i]; if(o.status==='done') continue;
+    o.status='running'; renderPlan();
+    var tk=o.tid+'|'+o.name;
+    var cur=(o.target.attrs||[]).filter(function(x){return x.name===o.name})[0];
+    var path='/contacts/attributes/'+o.category+'/'+encodeURIComponent(o.name);
+    if(o.kind==='create'){
+      if(failed[tk]){skip(o,'The delete step did not succeed');continue}
+      if(cur&&!gone[tk]){skip(o,'Already exists in the target');continue}
+    }else{
+      if(!cur){skip(o,'Attribute not found in the target');continue}
+      if(cur.category!==o.category){skip(o,'Category changed since loading');continue}
+    }
+    var method=o.kind==='delete'?'DELETE':o.kind==='update'?'PUT':'POST';
+    if(S.mode==='dry'){
+      log('info',o.target,'DRY RUN '+method+' '+path+(o.body?' '+JSON.stringify(o.body):''),'—',0,'Not sent');
+      o.status='dry'; if(o.kind==='delete')gone[tk]=1; renderPlan(); await sleep(60); continue;
+    }
+    var r=await api(o.target,method,path,o.body||undefined);
+    if(r.ok){
+      o.status='done';S.stale=true;
+      if(o.kind==='delete'){o.target.attrs=o.target.attrs.filter(function(x){return x.name!==o.name});gone[tk]=1}
+      else if(o.kind==='update'){if(o.body.enumeration)cur.enumeration=o.body.enumeration;else if(o.body.multiCategoryOptions)cur.multiCategoryOptions=o.body.multiCategoryOptions;else cur.calculatedValue=o.body.value}
+      else o.target.attrs.push({name:o.name,category:o.category,type:o.body.type,enumeration:o.body.enumeration,multiCategoryOptions:o.body.multiCategoryOptions});
+    }else{
+      o.status='error';o.msg=(r.data&&r.data.message)||('HTTP '+r.status);
+      if(o.kind==='delete')failed[tk]=1;
+    }
+    renderPlan(); await sleep(700);
+  }
+  S.running=false; renderPlan();
+}
+
+/* ---------- history ---------- */
+function renderLogs(){
+  var el=$('#p-logs');
+  var opts=['all','ok','warn','error','info'].map(function(k){return '<option value="'+k+'"'+(S.logFilter===k?' selected':'')+'>'+(k==='all'?'All levels':k)+'</option>'}).join('');
+  el.innerHTML='<div><h2>History and API responses</h2><p class="muted">Every request, with status, duration and response body. API keys never appear here, only their last four characters.</p></div>'+
+    '<div class="row"><select id="lf" aria-label="Filter log level">'+opts+'</select><button class="btn sm" data-act="copylog">Copy log as JSON</button><button class="btn sm" data-act="clearlog">Clear history</button></div>'+
+    '<div id="loglist"></div>';
+  renderLogList();
+}
+function renderLogList(){
+  var el=$('#loglist'); if(!el) return;
+  var items=S.logs.filter(function(l){return S.logFilter==='all'||l.level===S.logFilter}).slice().reverse();
+  if(!items.length){el.innerHTML='<div class="empty"><p>No requests yet.</p></div>';return}
+  var cls={ok:'ok',warn:'warn',error:'bad',info:'info'};
+  el.innerHTML=items.map(function(l){
+    return '<details class="log"><summary><span class="mono muted">'+l.ts+'</span><span class="chip '+cls[l.level]+'">'+esc(l.status)+'</span><span>'+esc(l.acct)+'</span><span class="mono">'+esc(l.req)+'</span><span class="muted">'+(l.ms?l.ms+' ms':'')+'</span></summary><pre>'+esc(bodyText(l.body))+'</pre></details>';
+  }).join('');
+}
+
+/* ---------- tabs and events ---------- */
+function showTab(){
+  ['accounts','compare','plan','logs'].forEach(function(t){$('#p-'+t).hidden=S.tab!==t});
+  document.querySelectorAll('#tabs button').forEach(function(b){b.setAttribute('aria-selected',String(b.dataset.tab===S.tab))});
+  if(S.tab==='plan'){S.confirming=false;if(!S.running&&!S.ops.some(function(o){return o.status!=='pending'}))S.ops=buildOps();renderPlan()}
+  if(S.tab==='compare') renderCompare();
+  if(S.tab==='logs') renderLogs();
+}
+$('#tabs').addEventListener('click',function(e){var b=e.target.closest('button');if(b){S.tab=b.dataset.tab;showTab()}});
+
+document.addEventListener('input',function(e){
+  var t=e.target,row=t.closest('.acct');
+  if(row){var a=S.accounts.filter(function(x){return x.id===row.dataset.id})[0];if(!a)return;
+    if(t.dataset.f==='label')a.label=t.value; if(t.dataset.f==='key'){a.key=t.value;persist()}}
+  if(t.id==='q'){S.q=t.value;renderMx()}
+  if(t.id==='delconfirm'){S.delTyped=t.value;var rb=$('[data-act="run"]');if(rb)rb.disabled=(t.value!=='DELETE')}
+});
+document.addEventListener('change',function(e){
+  var t=e.target;
+  if(t.dataset&&t.dataset.f==='model'){var id=t.closest('.acct').dataset.id;S.accounts.forEach(function(a){a.isModel=a.id===id});persist()}
+  if(t.id==='remember'){S.remember=t.checked;persist()}
+  if(t.id==='flt'){S.filter=t.value;renderMx()}
+  if(t.id==='onlydiff'){S.onlyDiff=t.checked;renderMx()}
+  if(t.id==='lf'){S.logFilter=t.value;renderLogList()}
+  if(t.dataset&&t.dataset.k){var k=t.dataset.k;
+    if(t.checked)S.sel.add(k);else S.sel.delete(k);
+    var isDel=/\|delete$/.test(k);
+    if(isDel&&!t.checked)S.sel.delete(k.replace(/delete$/,'create'));
+    S.ops=[];updateSel();if(isDel)renderMx()}
+});
+document.addEventListener('click',function(e){
+  var b=e.target.closest('[data-act]'); if(!b) return; var act=b.dataset.act;
+  if(act==='add'){S.accounts.push(newAcct('Target '+S.accounts.length,false));renderAccounts()}
+  else if(act==='rm'){var id=b.closest('.acct').dataset.id;S.accounts=S.accounts.filter(function(a){return a.id!==id});if(S.accounts.length&&!S.accounts.some(function(a){return a.isModel}))S.accounts[0].isModel=true;persist();renderAccounts()}
+  else if(act==='load'){loadAll()}
+  else if(act==='demo'){S.accounts=demoAccounts();S.remember=false;persist();renderAccounts();log('info',null,'Demo data loaded','—',0,'Three simulated accounts. No network calls are made for these.');loadAll()}
+  else if(act==='clear'){S.accounts.forEach(function(a){a.key='';a.attrs=null;a.status='idle';a.info='';a.demo=false});S.cmp=null;S.sel=new Set();S.ops=[];persist();renderAccounts();renderCompare();renderPlan();flash('Keys cleared from memory.')}
+  else if(act==='goaccounts'){S.tab='accounts';showTab()}
+  else if(act==='gocompare'){S.tab='compare';showTab()}
+  else if(act==='toplan'){S.tab='plan';showTab()}
+  else if(act==='selmiss'){var tid=b.dataset.t;Object.keys(S.cmp.cells[tid]).forEach(function(k){var c=S.cmp.cells[tid][k];if(c.status==='missing'&&c.actionable)S.sel.add(tid+'|'+k+'|create')});S.ops=[];renderMx();updateSel()}
+  else if(act==='clearsel'){S.sel=new Set();S.ops=[];renderMx();updateSel()}
+  else if(act==='report'){S.showReport=!S.showReport;renderCompare()}
+  else if(act==='copyrep'){copyText($('#reptext').value,$('#reptext'))}
+  else if(act==='mode'){if(!S.running){S.mode=b.dataset.m;S.confirming=false;S.ops=S.ops.filter(function(o){return o.status==='pending'}).length===S.ops.length?S.ops:buildOps();renderPlan()}}
+  else if(act==='run'){
+    if(S.mode==='live'&&!S.confirming){S.confirming=true;S.delTyped='';renderPlan();return}
+    if(S.confirming&&S.ops.some(function(o){return o.kind==='delete'})&&S.delTyped!=='DELETE')return;
+    if(S.ops.some(function(o){return o.status!=='pending'&&o.status!=='error'&&o.status!=='dry'}))S.ops=buildOps();
+    S.ops.forEach(function(o){if(o.status==='error'||o.status==='dry')o.status='pending'});
+    runPlan();
+  }
+  else if(act==='cancelrun'){S.confirming=false;renderPlan()}
+  else if(act==='reload'){S.tab='accounts';showTab();loadAll()}
+  else if(act==='copylog'){var tmp=document.createElement('textarea');tmp.value=JSON.stringify(S.logs,null,2);document.body.appendChild(tmp);copyText(tmp.value,tmp);setTimeout(function(){tmp.remove()},300)}
+  else if(act==='clearlog'){S.logs=[];saveLogs();$('#n-logs').textContent=0;renderLogs()}
+});
+
+loadLogs(); $('#n-logs').textContent=S.logs.length; renderAccounts(); renderCompare(); renderPlan(); renderLogs(); showTab();
+})();
+</script>
+</body></html>
