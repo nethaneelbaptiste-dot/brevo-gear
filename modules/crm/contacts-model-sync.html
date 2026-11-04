@@ -78,6 +78,8 @@ table.mx{border-collapse:collapse;width:100%;min-width:720px}
 .sub{font-size:12px;color:var(--muted);margin-top:2px;overflow-wrap:anywhere}
 .pick{display:flex;gap:6px;align-items:center;font-size:12px;margin-top:6px;cursor:pointer}
 .mx td.none{color:var(--muted)}
+.ren{display:block;width:100%;max-width:260px;margin-top:4px;padding:3px 6px;font:12.5px var(--font-mono);border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--fg)}
+.ren[aria-invalid=true]{border-color:var(--bad)}
 .pick.danger{color:var(--bad);font-weight:500}
 .pick input:disabled+*{opacity:.5}
 .bar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:space-between;background:var(--surface2);border-radius:8px;padding:10px 12px}
@@ -135,7 +137,7 @@ var uid=0; function nid(){uid++;return 'a'+uid}
 function mask(k){return k?('••••'+String(k).slice(-4)):''}
 
 var S={tab:'accounts',accounts:[],cmp:null,sel:new Set(),filter:'all',onlyDiff:true,q:'',logs:[],logFilter:'all',
-  mode:'dry',confirming:false,ops:[],running:false,stale:false,showReport:false,remember:false,delTyped:''};
+  mode:'dry',confirming:false,ops:[],running:false,stale:false,showReport:false,remember:false,delTyped:'',ren:{}};
 
 /* ---------- accounts ---------- */
 function newAcct(label,isModel){return {id:nid(),label:label||'',key:'',isModel:!!isModel,status:'idle',info:'',attrs:null,demo:false,mock:null}}
@@ -270,7 +272,7 @@ async function loadAll(){
     if(!r.ok||!r.data||!r.data.attributes){a.status='error';a.info=(r.data&&r.data.message)||('HTTP '+r.status);a.attrs=null;renderAccounts();continue}
     a.attrs=r.data.attributes; a.status='ok'; a.info=(acc.data.companyName||'Account')+' · '+a.attrs.length+' attributes'; renderAccounts();
   }
-  S.stale=false; S.sel=new Set(); S.ops=[]; S.confirming=false;
+  S.stale=false; S.sel=new Set(); S.ren={}; S.ops=[]; S.confirming=false;
   buildCompare(); renderAccounts(); renderCompare(); renderPlan();
   if(S.cmp){S.tab='compare';showTab()}
   var d=document.getElementById('loadBtn'); if(d) d.disabled=false;
@@ -397,11 +399,17 @@ function renderCompare(){
 function isMulti(a){return a.category==='normal'&&a.type==='multiple-choice'}
 function canUpdate(m,t){return m.category===t.category&&(m.category==='category'||m.category==='calculated'||m.category==='global'||(isMulti(m)&&isMulti(t)))}
 function tick(key,label,cls,dis){return '<label class="pick '+(cls||'')+'"><input type="checkbox" data-k="'+esc(key)+'" '+(S.sel.has(key)?'checked':'')+(dis?' disabled':'')+'><span>'+label+'</span></label>'}
+function renHtml(b){
+  if(!S.sel.has(b+'create')) return '';
+  var v=S.ren[b]||'';
+  return '<input type="text" class="ren" data-ren="'+esc(b)+'" value="'+esc(v)+'" placeholder="create as (same name)" autocomplete="off" spellcheck="false" aria-label="Create under another name"'+(v&&!validName(v)?' aria-invalid="true"':'')+'>';
+}
+function validName(n){return /^[A-Z0-9_]+$/.test(n)}
 function pickHtml(x,t,r){
   if(!r.m) return '';
   var b=t.id+'|'+r.name+'|';
-  if(x.status==='missing'&&x.actionable) return tick(b+'create','replicate');
-  if(x.status==='similar'&&x.actionable) return tick(b+'create','create anyway');
+  if(x.status==='missing'&&x.actionable) return tick(b+'create','replicate')+renHtml(b);
+  if(x.status==='similar'&&x.actionable) return tick(b+'create','create anyway')+renHtml(b);
   if(x.status==='type') return tick(b+'delete','delete (irreversible)','danger')+tick(b+'create','then recreate from model','',!(S.sel.has(b+'delete')&&inScope(r.m)));
   if((x.status==='enum'||x.status==='formula')&&canUpdate(r.m,x.ta)) return tick(b+'update','update values from model');
   return '';
@@ -497,7 +505,12 @@ function buildOps(){
       }
       ops.push(base);return;
     }
-    if(cur&&!S.sel.has(tid+'|'+name+'|delete')) return;
+    var nn=(S.ren[tid+'|'+name+'|']||'').trim();
+    if(nn&&nn!==name){
+      base.from=name;base.name=nn;
+      if(!validName(nn)) base.invalid='Invalid name: use capital letters, digits and underscores only';
+      else if(t.attrs.some(function(x){return x.name===nn})) return;
+    }else if(cur&&!S.sel.has(tid+'|'+name+'|delete')) return;
     base.kind='create';base.category=m.category;
     base.body=m.category==='category'?Object.assign({type:'category'},enumBody()):isMulti(m)?Object.assign({type:'multiple-choice'},multiBody()):{type:m.type||'text'};
     if(m.category==='category'){var vs=(m.enumeration||[]).map(function(e){return e.value});if(vs.some(function(v,i){return v===0||vs.indexOf(v)!==i}))base.warn='Model option values are 0 or duplicated (non-integer values in Brevo); check the options after creation'}
@@ -516,7 +529,7 @@ function renderPlan(){
     var cls=o.status==='done'?'ok':o.status==='error'?'bad':o.status==='skipped'||o.status==='dry'?'info':'mute';
     var label={pending:'Pending',done:{'delete':'Deleted',update:'Updated',create:'Created'}[o.kind],error:'Failed',skipped:'Skipped',dry:'Dry run OK',running:'Running…'}[o.status];
     var kc={'delete':'bad',update:'warn',create:'ok'}[o.kind];
-    return '<div class="op"><div>'+esc(o.target.label)+'</div><div><span class="chip '+kc+'">'+o.kind+'</span> <span class="mono">'+esc(o.name)+'</span></div><div class="sub mono">'+esc(o.category+(o.body?' '+JSON.stringify(o.body):''))+(o.warn?'<br><b>'+esc(o.warn)+'</b>':'')+(o.msg?'<br>'+esc(o.msg)+'':'')+'</div><span class="chip '+cls+'">'+label+'</span></div>';
+    return '<div class="op"><div>'+esc(o.target.label)+'</div><div><span class="chip '+kc+'">'+o.kind+'</span> <span class="mono">'+esc(o.name)+'</span>'+(o.from?'<div class="sub">renamed from <span class="mono">'+esc(o.from)+'</span></div>':'')+'</div><div class="sub mono">'+esc(o.category+(o.body?' '+JSON.stringify(o.body):''))+(o.warn?'<br><b>'+esc(o.warn)+'</b>':'')+(o.msg?'<br>'+esc(o.msg)+'':'')+'</div><span class="chip '+cls+'">'+label+'</span></div>';
   }).join('');
   var live=S.mode==='live';
   var nDel=S.ops.filter(function(o){return o.kind==='delete'}).length;
@@ -539,6 +552,7 @@ async function runPlan(){
   for(var i=0;i<S.ops.length;i++){
     var o=S.ops[i]; if(o.status==='done') continue;
     o.status='running'; renderPlan();
+    if(o.invalid){skip(o,o.invalid);continue}
     var tk=o.tid+'|'+o.name;
     var cur=(o.target.attrs||[]).filter(function(x){return x.name===o.name})[0];
     var path='/contacts/attributes/'+o.category+'/'+encodeURIComponent(o.name);
@@ -603,6 +617,12 @@ document.addEventListener('input',function(e){
   if(row){var a=S.accounts.filter(function(x){return x.id===row.dataset.id})[0];if(!a)return;
     if(t.dataset.f==='label')a.label=t.value; if(t.dataset.f==='key'){a.key=t.value;persist()}}
   if(t.id==='q'){S.q=t.value;renderMx()}
+  if(t.className==='ren'&&t.dataset.ren!==undefined){
+    var up=t.value.toUpperCase().replace(/\s+/g,'_');
+    if(up!==t.value){var p=t.selectionStart;t.value=up;try{t.setSelectionRange(p,p)}catch(x){}}
+    S.ren[t.dataset.ren]=up; S.ops=[];
+    if(up&&!validName(up))t.setAttribute('aria-invalid','true');else t.removeAttribute('aria-invalid');
+  }
   if(t.id==='delconfirm'){S.delTyped=t.value;var rb=$('[data-act="run"]');if(rb)rb.disabled=(t.value!=='DELETE')}
 });
 document.addEventListener('change',function(e){
@@ -616,7 +636,7 @@ document.addEventListener('change',function(e){
     if(t.checked)S.sel.add(k);else S.sel.delete(k);
     var isDel=/\|delete$/.test(k);
     if(isDel&&!t.checked)S.sel.delete(k.replace(/delete$/,'create'));
-    S.ops=[];updateSel();if(isDel)renderMx()}
+    S.ops=[];updateSel();if(isDel||/\|create$/.test(k))renderMx()}
 });
 document.addEventListener('click',function(e){
   var b=e.target.closest('[data-act]'); if(!b) return; var act=b.dataset.act;
@@ -624,12 +644,12 @@ document.addEventListener('click',function(e){
   else if(act==='rm'){var id=b.closest('.acct').dataset.id;S.accounts=S.accounts.filter(function(a){return a.id!==id});if(S.accounts.length&&!S.accounts.some(function(a){return a.isModel}))S.accounts[0].isModel=true;persist();renderAccounts()}
   else if(act==='load'){loadAll()}
   else if(act==='demo'){S.accounts=demoAccounts();S.remember=false;persist();renderAccounts();log('info',null,'Demo data loaded','—',0,'Three simulated accounts. No network calls are made for these.');loadAll()}
-  else if(act==='clear'){S.accounts.forEach(function(a){a.key='';a.attrs=null;a.status='idle';a.info='';a.demo=false});S.cmp=null;S.sel=new Set();S.ops=[];persist();renderAccounts();renderCompare();renderPlan();flash('Keys cleared from memory.')}
+  else if(act==='clear'){S.accounts.forEach(function(a){a.key='';a.attrs=null;a.status='idle';a.info='';a.demo=false});S.cmp=null;S.sel=new Set();S.ren={};S.ops=[];persist();renderAccounts();renderCompare();renderPlan();flash('Keys cleared from memory.')}
   else if(act==='goaccounts'){S.tab='accounts';showTab()}
   else if(act==='gocompare'){S.tab='compare';showTab()}
   else if(act==='toplan'){S.tab='plan';showTab()}
   else if(act==='selmiss'){var tid=b.dataset.t;Object.keys(S.cmp.cells[tid]).forEach(function(k){var c=S.cmp.cells[tid][k];if(c.status==='missing'&&c.actionable)S.sel.add(tid+'|'+k+'|create')});S.ops=[];renderMx();updateSel()}
-  else if(act==='clearsel'){S.sel=new Set();S.ops=[];renderMx();updateSel()}
+  else if(act==='clearsel'){S.sel=new Set();S.ren={};S.ops=[];renderMx();updateSel()}
   else if(act==='report'){S.showReport=!S.showReport;renderCompare()}
   else if(act==='copyrep'){copyText($('#reptext').value,$('#reptext'))}
   else if(act==='mode'){if(!S.running){S.mode=b.dataset.m;S.confirming=false;S.ops=S.ops.filter(function(o){return o.status==='pending'}).length===S.ops.length?S.ops:buildOps();renderPlan()}}
