@@ -62,13 +62,21 @@ footer{padding-top:24px;border-top:1px solid var(--line);font-size:14px;color:va
     </div>
   </header>
 
-  <section class="intro"><p>Tools to compare and align the CRM data model of Brevo accounts: contact attributes today, lists, segments and objects next.</p></section>
+  <section class="intro"><p>Tools to compare and align the CRM data model of Brevo accounts: contact attributes and custom objects today, lists and segments next.</p></section>
 
   <section class="grid" aria-label="Tools">
     <a class="card" href="contacts-model-sync.html">
       <h3>Contacts model replication</h3>
       <p>Compare the contact attributes of a model account with other sub-accounts, then replicate or fix what you approve. Dry run first, typed confirmation before any delete.</p>
       <div class="tags"><span class="tag">REST API v3</span><span class="tag">Dry run</span><span class="tag">Demo data</span><span class="tag">Live calls</span></div>
+      <div class="foot"><span>Open tool</span>
+        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
+      </div>
+    </a>
+    <a class="card" href="custom-object-model-sync.html">
+      <h3>Custom objects model comparison</h3>
+      <p>Compare the custom object data model of a model account with other accounts: ERD with gaps highlighted, probable matches, and a checklist of what to create. Read-only for now.</p>
+      <div class="tags"><span class="tag">REST API v3</span><span class="tag">Read-only</span><span class="tag">ERD</span><span class="tag">Demo data</span></div>
       <div class="foot"><span>Open tool</span>
         <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
       </div>
@@ -80,6 +88,7 @@ footer{padding-top:24px;border-top:1px solid var(--line);font-size:14px;color:va
     <ul>
       <li>API keys stay in the tab's memory. Do not paste them in chat.</li>
       <li>Deleting is offered only on attributes whose type differs, and needs a typed confirmation.</li>
+      <li>Custom objects need an Enterprise or Pro plan. The custom object tool infers the model from records and creates nothing.</li>
       <li>Check the rate-limit tier of each account first. The Default tier can answer 429 for minutes.</li>
     </ul>
   </section>

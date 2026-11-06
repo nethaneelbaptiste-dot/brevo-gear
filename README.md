@@ -4,7 +4,7 @@ Static internal tool hub. Entry point: `index.html` -> `modules/<module>/index.h
 
 ```
 index.html
-modules/crm/index.html, contacts-model-sync.html
+modules/crm/index.html, contacts-model-sync.html, custom-object-model-sync.html
 modules/mcp/index.html, mcp-prompt-runner.html
 ```
 

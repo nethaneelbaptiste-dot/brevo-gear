@@ -1,0 +1,364 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>Custom Object Model Sync</title><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap"><style>
+/* v0.1: read-only. Compares the custom object models of Brevo accounts, inferred from records. Creates nothing. */
+:root{--bg:#f2f5f4;--surface:#fff;--surface2:#e8eeec;--line:#d2dcd8;--fg:#13201b;--muted:#566862;--accent:#0a7d5a;--accent-fg:#fff;--ok:#17794a;--ok-bg:#dff2e7;--warn:#8f5700;--warn-bg:#faedcf;--bad:#a8231b;--bad-bg:#fbe0dd;--info:#2352a3;--info-bg:#e0e8f8;--font-body:'IBM Plex Sans',system-ui,sans-serif;--font-mono:'IBM Plex Mono',ui-monospace,monospace;--font-display:'Bricolage Grotesque','IBM Plex Sans',sans-serif}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0e1513;--surface:#151e1b;--surface2:#1d2925;--line:#2b3a35;--fg:#e3ece8;--muted:#8fa39b;--accent:#3dd6a6;--accent-fg:#04231a;--ok:#62d69a;--ok-bg:#183a2a;--warn:#f0b955;--warn-bg:#3b2d10;--bad:#ff8b80;--bad-bg:#42191a;--info:#8fb2ff;--info-bg:#1b2a4a;color-scheme:dark}}
+*{box-sizing:border-box}[hidden]{display:none!important}
+body{background:var(--bg);color:var(--fg);font-family:var(--font-body);font-size:14px;line-height:1.5;margin:0;padding:20px max(16px,env(safe-area-inset-right,0px)) 48px max(16px,env(safe-area-inset-left,0px))}
+.wrap{max-width:1180px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+h1{font-family:var(--font-display);font-size:26px;line-height:1.15;margin:0}h2{font-size:15px;margin:0 0 4px}h3{font-size:13px;margin:8px 0 4px}p{margin:0}
+code,.mono{font-family:var(--font-mono);font-size:12.5px}.muted{color:var(--muted)}
+nav{display:flex;gap:4px;flex-wrap:wrap;border-bottom:1px solid var(--line)}
+nav button{background:none;border:0;border-bottom:2px solid transparent;padding:10px 14px;font:inherit;font-weight:500;color:var(--muted);cursor:pointer;margin-bottom:-1px}
+nav button[aria-selected="true"]{color:var(--fg);border-bottom-color:var(--accent)}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:18px;display:flex;flex-direction:column;gap:14px;min-width:0}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+button,input,textarea{font:inherit;color:var(--fg)}
+.btn{background:var(--surface2);border:1px solid var(--line);border-radius:6px;padding:8px 14px;cursor:pointer;font-weight:500}.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}.btn:disabled{opacity:.45;cursor:not-allowed}.btn.sm{padding:4px 10px;font-size:12.5px}
+select{font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:6px 8px}
+input[type=text],input[type=password],textarea{background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:8px 10px;min-width:0}input[type=password]{font-family:var(--font-mono)}
+.erd{overflow:auto;border:1px solid var(--line);border-radius:8px;background:var(--bg);padding:8px;max-height:760px}.erd svg{display:block}
+.e-box{fill:var(--surface);stroke:var(--line)}.e-ghost{fill:var(--surface);stroke:var(--muted);stroke-dasharray:4 3}.e-head{fill:var(--surface2)}.e-head.bad{fill:var(--bad-bg)}
+.e-title{font:600 13px var(--font-body);fill:var(--fg)}.e-sub{font:11px var(--font-body);fill:var(--muted)}.e-sub.bad{fill:var(--bad);font-weight:600}
+.e-attr{font:11.5px var(--font-mono);fill:var(--fg)}.e-typ{font:11px var(--font-mono);fill:var(--muted)}
+.e-hl.sim{fill:var(--info-bg)}.e-attr.sim{fill:var(--info)}.e-hl.miss{fill:var(--bad-bg)}.e-hl.type{fill:var(--warn-bg)}.e-attr.miss{fill:var(--bad)}.e-attr.type{fill:var(--warn)}
+.e-edge{stroke:var(--muted);stroke-width:1.5;fill:none}.e-edge.bad{stroke:var(--bad);stroke-dasharray:6 4}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--muted);align-items:center}.legend i{display:inline-block;width:16px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+textarea{width:100%;min-height:220px;font-family:var(--font-mono);font-size:12px}
+.acct{display:grid;grid-template-columns:minmax(120px,1fr) minmax(200px,2fr) auto auto minmax(140px,1.4fr);gap:10px;align-items:center;padding:10px 0;border-top:1px solid var(--line)}
+.acct .st{font-size:12.5px;overflow-wrap:anywhere}@media(max-width:760px){.acct{grid-template-columns:1fr 1fr}.acct .st{grid-column:1/-1}}
+.radio{display:flex;gap:6px;align-items:center;white-space:nowrap}
+.chip{display:inline-block;font-size:11.5px;font-weight:600;padding:2px 8px;border-radius:4px;white-space:nowrap}.chip.ok{background:var(--ok-bg);color:var(--ok)}.chip.bad{background:var(--bad-bg);color:var(--bad)}.chip.warn{background:var(--warn-bg);color:var(--warn)}.chip.info{background:var(--info-bg);color:var(--info)}.chip.mute{background:var(--surface2);color:var(--muted)}
+.note{font-size:12.5px;color:var(--muted);background:var(--surface2);padding:8px 12px;border-radius:6px}.note.warn{background:var(--warn-bg);color:var(--warn)}.note ul{margin:4px 0 0;padding-left:18px}
+.tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:8px}table.mx{border-collapse:collapse;width:100%;min-width:640px}
+.mx th,.mx td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}.mx th{font-size:11.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);background:var(--surface2)}.mx tr:last-child td{border-bottom:0}
+.sub{font-size:12px;color:var(--muted);margin-top:2px;overflow-wrap:anywhere}
+.log{border-top:1px solid var(--line);padding:6px 0;font-size:12.5px}.log summary{cursor:pointer;display:flex;gap:10px;flex-wrap:wrap;align-items:center}.log pre{margin:8px 0 4px;padding:10px;background:var(--bg);border:1px solid var(--line);border-radius:6px;white-space:pre-wrap;overflow-wrap:anywhere;font-family:var(--font-mono);font-size:12px;max-height:240px;overflow:auto}
+.empty{padding:28px 12px;text-align:center;color:var(--muted)}#flash{font-size:12.5px;color:var(--ok);min-height:18px}
+</style></head><body><div class="wrap">
+<header><div><a href="index.html" style="font-size:13px;font-weight:600;color:var(--accent);text-decoration:none">← CRM Models</a>
+<h1>Custom Object Model Sync</h1>
+<p class="muted">Compare the custom object data model of a model Brevo account with other accounts, then get a checklist of what to create. v0.1 is read-only: it creates and deletes nothing.</p></div></header>
+<nav role="tablist" id="tabs">
+<button role="tab" data-tab="accounts" aria-selected="true">1 · Accounts</button>
+<button role="tab" data-tab="compare" aria-selected="false">2 · Comparison</button>
+<button role="tab" data-tab="report" aria-selected="false">3 · Checklist and report</button>
+<button role="tab" data-tab="logs" aria-selected="false">4 · History</button></nav>
+<section class="panel" id="p-accounts"></section><section class="panel" id="p-compare" hidden></section><section class="panel" id="p-report" hidden></section><section class="panel" id="p-logs" hidden></section>
+</div>
+<script>
+(function(){
+'use strict';
+var BASE='https://api.brevo.com/v3',SAMPLE=1000,MAXPAGES=3;
+function $(s){return document.querySelector(s)}
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
+function sleep(ms){return new Promise(function(r){setTimeout(r,ms)})}
+function mask(k){return k?'••••'+String(k).slice(-4):''}
+var uid=0;function nid(){return 'a'+(++uid)}
+var S={tab:'accounts',accounts:[],types:'',cmp:null,logs:[],erdT:'',erdDiff:false};
+function newAcct(l,m){return {id:nid(),label:l||'',key:'',isModel:!!m,status:'idle',info:'',model:null,demo:false,mock:null}}
+S.accounts=[newAcct('Model account',true),newAcct('Target 1',false)];
+
+/* ---------- logging, keys never logged in full ---------- */
+function log(level,acct,req,status,ms,body){S.logs.push({ts:new Date().toLocaleTimeString('fr-FR'),level:level,acct:acct?acct.label||'(unnamed)':'-',req:req,status:status,ms:ms,body:body});renderLogs()}
+function bodyText(d){try{var t=typeof d==='string'?d:JSON.stringify(d,null,2);return t.length>3000?t.slice(0,3000)+'\n... truncated':t}catch(e){return String(d)}}
+
+/* ---------- API (GET only) ---------- */
+async function apiGet(a,path){
+  var t0=performance.now(),req='GET '+path+'  (api-key '+mask(a.key)+')';
+  if(a.demo){await sleep(80);var m=mockGet(a,path);log(m.ok?'ok':'error',a,req+' [demo]',m.status,80,{records:(m.data.records||[]).length});return m}
+  for(var n=0;n<=3;n++){
+    try{
+      var res=await fetch(BASE+path,{headers:{'api-key':a.key,'accept':'application/json'}});
+      if(res.status===429&&n<3){var w=2000*Math.pow(2,n)+Math.round(Math.random()*400);log('warn',a,req,429,Math.round(performance.now()-t0),'Rate limited, waiting '+w+' ms');await sleep(w);continue}
+      var txt=await res.text(),data=txt;try{data=txt?JSON.parse(txt):{}}catch(e){}
+      log(res.ok?'ok':'error',a,req,res.status,Math.round(performance.now()-t0),res.ok&&data&&data.records?{count:data.count,records:data.records.length}:data);
+      return {ok:res.ok,status:res.status,data:data};
+    }catch(e){
+      var msg='Network error (CORS, offline, or the page is an embedded artifact). Open this file from Brevo Gear or locally.';
+      log('error',a,req,'ERR',Math.round(performance.now()-t0),msg);return {ok:false,status:0,data:{message:msg}};
+    }
+  }
+}
+
+/* ---------- name similarity (probable matches) ---------- */
+function norm(s){return String(s).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().replace(/[^A-Z0-9]/g,'')}
+function lev(a,b){var m=a.length,n=b.length,d=[],i,j;for(i=0;i<=m;i++)d[i]=[i];for(j=1;j<=n;j++)d[0][j]=j;for(i=1;i<=m;i++)for(j=1;j<=n;j++)d[i][j]=Math.min(d[i-1][j]+1,d[i][j-1]+1,d[i-1][j-1]+(a[i-1]===b[j-1]?0:1));return d[m][n]}
+/* 0 = not similar. Names that differ only by their digits (billing_phone_2 / _3) are never similar. */
+function sim(a,b){
+  if(a===b)return 0;var x=norm(a),y=norm(b);if(!x.length||!y.length)return 0;
+  if(x.replace(/[^0-9]/g,'')!==y.replace(/[^0-9]/g,''))return 0;
+  if(x===y)return 1;var s=1-lev(x,y)/Math.max(x.length,y.length);return s>=0.82?s:0;
+}
+
+/* ---------- inference from records ---------- */
+var ISO=/^\d{4}-\d{2}-\d{2}([T ]\d{2}:\d{2}(:\d{2})?(\.\d+)?(Z|[+-]\d{2}:?\d{2})?)?$/;
+function kind(v){
+  if(v===null||v===undefined||v==='')return null;
+  if(typeof v==='boolean')return 'boolean';
+  if(typeof v==='number')return Number.isInteger(v)?'number':'number';
+  if(Array.isArray(v))return 'multiple-choice?';
+  if(typeof v==='string'&&ISO.test(v))return 'date';
+  return 'text';
+}
+function assocType(x){return x&&(x.object_type||x.type||x.objectType)||null}
+function inferType(recs,type){
+  var attrs={},assoc={};
+  recs.forEach(function(r){
+    var at=r.attributes||{};
+    Object.keys(at).forEach(function(k){
+      var kd=kind(at[k]),e=attrs[k]=attrs[k]||{kinds:{},seen:0,vals:{},nv:0,over:false};
+      if(kd){e.kinds[kd]=(e.kinds[kd]||0)+1;e.seen++}
+      if(kd==='text'&&!e.over&&!Object.prototype.hasOwnProperty.call(e.vals,at[k])){if(e.nv>=40)e.over=true;else{e.vals[at[k]]=1;e.nv++}}
+    });
+    (r.associations||[]).forEach(function(g){var t=assocType(g);if(t)assoc[t]=(assoc[t]||0)+1});
+  });
+  var out={name:type,sampled:recs.length,attrs:{},assoc:Object.keys(assoc).sort()};
+  Object.keys(attrs).sort().forEach(function(k){
+    var ks=Object.keys(attrs[k].kinds);
+    var ty=ks.length===0?'unknown (always empty)':ks.length===1?ks[0]:'text (mixed: '+ks.join('/')+')';
+    if(ty==='text'&&/_cat$/i.test(k))ty='category?';
+    out.attrs[k]={type:ty,seen:attrs[k].seen,values:(ks.length===1&&ks[0]==='text'&&!attrs[k].over)?Object.keys(attrs[k].vals).sort():null};
+  });
+  return out;
+}
+async function loadType(a,type){
+  var recs=[],page=1,total=null;
+  while(page<=MAXPAGES){
+    var r=await apiGet(a,'/objects/'+encodeURIComponent(type)+'/records?limit='+SAMPLE+'&page_num='+page+'&association=true');
+    if(!r.ok)return {error:(r.data&&r.data.message)||('HTTP '+r.status)};
+    var got=r.data.records||[];if(total===null)total=r.data.count==null?got.length:r.data.count;
+    recs=recs.concat(got);if(!got.length||recs.length>=total)break;page++;
+  }
+  var m=inferType(recs,type);m.total=total;return m;
+}
+async function loadAll(){
+  var types=S.types.split(',').map(function(t){return t.trim()}).filter(Boolean);
+  var list=S.accounts.filter(function(a){return a.key.trim()});
+  if(!types.length){flash('List the object types to compare.');return}
+  if(list.length<2){flash('Enter at least two API keys.');return}
+  if(S.accounts.filter(function(a){return a.isModel}).length!==1){flash('Pick exactly one model account.');return}
+  for(var i=0;i<list.length;i++){
+    var a=list[i];a.status='loading';a.info='Loading...';a.model={};renderAccounts();
+    var bad=0;
+    for(var j=0;j<types.length;j++){var m=await loadType(a,types[j]);a.model[types[j]]=m;if(m.error)bad++}
+    a.status=bad===types.length?'error':'ok';a.info=(types.length-bad)+'/'+types.length+' types read';renderAccounts();
+  }
+  build();S.tab='compare';showTab();
+}
+
+/* ---------- comparison ---------- */
+function build(){
+  var model=S.accounts.filter(function(a){return a.isModel&&a.model})[0];
+  var targets=S.accounts.filter(function(a){return !a.isModel&&a.model});
+  if(!model||!targets.length){S.cmp=null;return}
+  var types=Object.keys(model.model),rows=[];
+  types.forEach(function(t){
+    var m=model.model[t],cells={};
+    targets.forEach(function(ta){
+      var x=ta.model[t],c={issues:[],ok:true};
+      if(!x||x.error){c.status='absent';c.detail=x&&x.error?x.error:'not found';c.ok=false}
+      else if(m.error){c.status='n/a';c.detail='model type unreadable'}
+      else{
+        c.status='present';
+        Object.keys(m.attrs).forEach(function(k){
+          if(!x.attrs[k])c.issues.push({kind:'missing',attr:k,want:m.attrs[k].type});
+          else if(m.attrs[k].type!==x.attrs[k].type&&m.attrs[k].type.indexOf('unknown')<0&&x.attrs[k].type.indexOf('unknown')<0)c.issues.push({kind:'type',attr:k,want:m.attrs[k].type,have:x.attrs[k].type});
+        });
+        Object.keys(x.attrs).forEach(function(k){if(!m.attrs[k])c.issues.push({kind:'extra',attr:k,have:x.attrs[k].type})});
+        m.assoc.forEach(function(o){if(x.assoc.indexOf(o)<0)c.issues.push({kind:'assoc-missing',attr:o})});
+        var ms=c.issues.filter(function(i){return i.kind==='missing'}),es=c.issues.filter(function(i){return i.kind==='extra'}),pairs=[],um={},ue={},sm=[];
+        ms.forEach(function(a){es.forEach(function(b){var s=sim(a.attr,b.attr);if(s)pairs.push({m:a,e:b,s:s})})});
+        pairs.sort(function(p,q){return q.s-p.s});
+        pairs.forEach(function(p){if(!um[p.m.attr]&&!ue[p.e.attr]){um[p.m.attr]=1;ue[p.e.attr]=1;sm.push({kind:'similar',attr:p.m.attr,as:p.e.attr,score:p.s,want:p.m.want,have:p.e.have})}});
+        c.issues=c.issues.filter(function(i){return !((i.kind==='missing'&&um[i.attr])||(i.kind==='extra'&&ue[i.attr]))}).concat(sm);
+        c.ok=!c.issues.some(function(i){return i.kind!=='extra'});
+      }
+      cells[ta.id]=c;
+    });
+    rows.push({type:t,m:m,cells:cells});
+  });
+  if(S.erdT!=='none'&&!targets.some(function(t){return t.id===S.erdT}))S.erdT=targets[0].id;
+  var variants=[],covered={};
+  rows.forEach(function(r){targets.forEach(function(t){(r.cells[t.id].issues||[]).forEach(function(i){if(i.kind==='similar'){covered[r.type+'|'+i.attr+'|'+i.as]=1;covered[r.type+'|'+i.as+'|'+i.attr]=1}})})});
+  types.forEach(function(t){
+    var nm={};S.accounts.forEach(function(a){if(a.model&&a.model[t]&&!a.model[t].error)Object.keys(a.model[t].attrs).forEach(function(k){(nm[k]=nm[k]||[]).push(a.label)})});
+    var ks=Object.keys(nm).sort();
+    for(var i=0;i<ks.length;i++)for(var j=i+1;j<ks.length;j++){
+      var s=sim(ks[i],ks[j]);if(!s||covered[t+'|'+ks[i]+'|'+ks[j]])continue;
+      if(nm[ks[i]].some(function(x){return nm[ks[j]].indexOf(x)>-1}))continue;
+      variants.push({type:t,a:ks[i],aa:nm[ks[i]],b:ks[j],bb:nm[ks[j]],s:s});
+    }
+  });
+  S.cmp={model:model,targets:targets,rows:rows,variants:variants};
+}
+var ISSUE={similar:['probable match','info'],missing:['attribute missing','bad'],type:['type differs','warn'],extra:['target-only','mute'],'assoc-missing':['association missing','bad']};
+
+/* ---------- ERD (SVG, built from the model's inferred schema; overlay = gaps in one target) ---------- */
+function typeShort(t){return t.indexOf('mixed')>-1?'text*':t.indexOf('unknown')===0?'unknown':t.replace('multiple-choice?','multi?')}
+function cut(s,n){s=String(s);return s.length>n?s.slice(0,n-1)+'…':s}
+function erdHtml(){
+  var c=S.cmp,tid=S.erdT,ov=tid&&tid!=='none',W=260,GW=170,RH=16,HH=28,GX=110,GY=70,PAD=20;
+  var ents=[],names=c.rows.map(function(r){return r.type}),ghosts={};
+  c.rows.forEach(function(r){
+    if(!r.m.error)r.m.assoc.forEach(function(o){if(names.indexOf(o)<0)ghosts[o]=1});
+    var attrs=r.m.error?[]:Object.keys(r.m.attrs).map(function(k){return {k:k,t:r.m.attrs[k].type,st:'ok'}});
+    var cell=ov?r.cells[tid]:null,absent=!!cell&&cell.status==='absent';
+    if(cell&&!absent)(cell.issues||[]).forEach(function(i){attrs.forEach(function(a){if(a.k!==i.attr)return;if(i.kind==='missing')a.st='miss';if(i.kind==='type')a.st='type'})});
+    if(absent)attrs.forEach(function(a){a.st='miss'});
+    var shown=(ov&&S.erdDiff&&!absent)?attrs.filter(function(a){return a.st!=='ok'}):attrs;
+    var note=r.m.error?'unreadable: '+r.m.error:(!shown.length?(attrs.length?'all '+attrs.length+' attributes in sync':'no attribute seen'):'');
+    ents.push({name:r.type,w:W,h:HH+Math.max(1,shown.length+(note&&shown.length?1:0))*RH+10,attrs:attrs,shown:shown,absent:absent,note:note});
+  });
+  Object.keys(ghosts).sort().forEach(function(g){ents.push({name:g,ghost:true,w:GW,h:44})});
+  var cols=Math.max(2,Math.ceil(Math.sqrt(ents.length))),colW=W+GX,rowH=[],rowY=[],y=PAD;
+  ents.forEach(function(e,i){e.col=i%cols;e.row=Math.floor(i/cols);rowH[e.row]=Math.max(rowH[e.row]||0,e.h)});
+  rowH.forEach(function(h,i){rowY[i]=y;y+=h+GY});
+  ents.forEach(function(e){e.x=PAD+e.col*colW+(e.ghost?(W-GW)/2:0);e.y=rowY[e.row]});
+  var TW=PAD*2+cols*colW-GX,TH=y-GY+PAD,by={};ents.forEach(function(e){by[e.name]=e});
+  var seen={},edges=[];
+  c.rows.forEach(function(r){if(r.m.error)return;r.m.assoc.forEach(function(o){var k=[r.type,o].sort().join('|');if(o!==r.type&&!seen[k]&&by[o]){seen[k]=1;edges.push([r.type,o])}})});
+  function miss(a,b){
+    if(!ov)return false;
+    return [[a,b],[b,a]].some(function(p){var r=c.rows.filter(function(x){return x.type===p[0]})[0];if(!r||r.m.error)return false;var x=r.cells[tid];if(!x)return false;if(x.status==='absent')return true;return (x.issues||[]).some(function(i){return i.kind==='assoc-missing'&&i.attr===p[1]})});
+  }
+  function clip(e,ox,oy){var cx=e.x+e.w/2,cy=e.y+e.h/2,dx=ox-cx,dy=oy-cy,t=Math.min(dx?(e.w/2)/Math.abs(dx):1e9,dy?(e.h/2)/Math.abs(dy):1e9);return [cx+dx*t,cy+dy*t]}
+  var s='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 '+TW+' '+TH+'" width="'+TW+'" height="'+TH+'" role="img" aria-label="Entity relationship diagram of the model">';
+  edges.forEach(function(g){
+    var A=by[g[0]],B=by[g[1]],p1=clip(A,B.x+B.w/2,B.y+B.h/2),p2=clip(B,A.x+A.w/2,A.y+A.h/2);
+    s+='<line class="e-edge'+(miss(g[0],g[1])?' bad':'')+'" x1="'+p1[0].toFixed(1)+'" y1="'+p1[1].toFixed(1)+'" x2="'+p2[0].toFixed(1)+'" y2="'+p2[1].toFixed(1)+'"/>';
+  });
+  ents.forEach(function(e){
+    if(e.ghost){s+='<rect class="e-ghost" x="'+e.x+'" y="'+e.y+'" width="'+e.w+'" height="'+e.h+'" rx="6"/><text class="e-title" x="'+(e.x+e.w/2)+'" y="'+(e.y+20)+'" text-anchor="middle">'+esc(cut(e.name,20))+'</text><text class="e-sub" x="'+(e.x+e.w/2)+'" y="'+(e.y+35)+'" text-anchor="middle">not compared</text>';return}
+    s+='<rect class="e-box" x="'+e.x+'" y="'+e.y+'" width="'+e.w+'" height="'+e.h+'" rx="6"/><rect class="e-head'+(e.absent?' bad':'')+'" x="'+e.x+'" y="'+e.y+'" width="'+e.w+'" height="'+HH+'" rx="6"/>'+
+      '<text class="e-title" x="'+(e.x+10)+'" y="'+(e.y+18)+'">'+esc(cut(e.name,22))+'</text><text class="e-sub'+(e.absent?' bad':'')+'" x="'+(e.x+e.w-10)+'" y="'+(e.y+18)+'" text-anchor="end">'+(e.absent?'absent in target':e.attrs.length+' attributes')+'</text>';
+    e.shown.forEach(function(a,i){
+      var ry=e.y+HH+4+i*RH,cl=a.st==='miss'?' miss':a.st==='type'?' type':a.st==='sim'?' sim':'';
+      if(cl)s+='<rect class="e-hl'+cl+'" x="'+(e.x+2)+'" y="'+ry+'" width="'+(e.w-4)+'" height="'+RH+'"/>';
+      s+='<text class="e-attr'+cl+'" x="'+(e.x+10)+'" y="'+(ry+12)+'">'+(a.st==='miss'?'✗ ':a.st==='type'?'≠ ':a.st==='sim'?'≈ ':'')+esc(cut(a.k,26))+'</text><text class="e-typ" x="'+(e.x+e.w-10)+'" y="'+(ry+12)+'" text-anchor="end">'+(a.st==='sim'?'as '+esc(cut(a.as,16)):esc(typeShort(a.t)))+'</text>';
+    });
+    if(e.note)s+='<text class="e-sub" x="'+(e.x+10)+'" y="'+(e.y+HH+4+e.shown.length*RH+12)+'">'+esc(cut(e.note,40))+'</text>';
+  });
+  s+='</svg>';
+  var opts='<option value="none"'+(!ov?' selected':'')+'>No overlay (model only)</option>'+c.targets.map(function(t){return '<option value="'+t.id+'"'+(tid===t.id?' selected':'')+'>'+esc(t.label)+'</option>'}).join('');
+  return '<div><h2>Data model (ERD)</h2><p class="muted">Object types of the model with the attributes seen in records. Lines are associations (cardinality and direction are not available). Pick a target to highlight what it lacks.</p></div>'+
+    '<div class="row"><label class="muted">Highlight gaps of <select id="erdt" aria-label="Overlay target">'+opts+'</select></label>'+(ov?'<label class="radio muted"><input type="checkbox" id="erdd" '+(S.erdDiff?'checked':'')+'> Only attributes with differences</label>':'')+'</div>'+
+    (ov?'<div class="legend"><span><i style="background:var(--bad-bg);border:1px solid var(--bad)"></i>✗ missing in target</span><span><i style="background:var(--warn-bg);border:1px solid var(--warn)"></i>≠ type differs</span><span><i style="background:var(--info-bg);border:1px solid var(--info)"></i>≈ probable match (spelled differently in target)</span><span><i style="border-top:2px dashed var(--bad);height:0;width:20px;border-radius:0"></i>association missing</span><span><i style="border:1px dashed var(--muted);background:var(--surface)"></i>related object, not compared</span></div>':'')+
+    '<div class="erd">'+s+'</div>';
+}
+function variantsHtml(){
+  var v=S.cmp.variants;if(!v.length)return '';
+  return '<div><h2>Naming variants across accounts</h2><p class="muted">Same attribute spelled differently in different accounts (probable matches). Pick one spelling before replicating.</p></div><div class="tablewrap"><table class="mx"><thead><tr><th>Object type</th><th>Spelling A</th><th>Spelling B</th><th>Similarity</th></tr></thead><tbody>'+
+  v.map(function(x){return '<tr><td class="mono">'+esc(x.type)+'</td><td><code>'+esc(x.a)+'</code><div class="sub">'+esc(x.aa.join(', '))+'</div></td><td><code>'+esc(x.b)+'</code><div class="sub">'+esc(x.bb.join(', '))+'</div></td><td>'+Math.round(x.s*100)+'%</td></tr>'}).join('')+'</tbody></table></div>';
+}
+function renderCompare(){
+  var el=$('#p-compare');
+  if(!S.cmp){el.innerHTML='<div class="empty">Load at least two accounts first.</div>';return}
+  var c=S.cmp;
+  el.innerHTML='<div><h2>Model: '+esc(c.model.label)+'</h2><p class="muted">Attributes and types are inferred from the first '+(SAMPLE*MAXPAGES)+' records per object type. See the limits in the checklist tab.</p></div>'+erdHtml()+variantsHtml()+'<div><h2>Differences by object type</h2></div>'+
+  '<div class="tablewrap"><table class="mx"><thead><tr><th>Object type</th><th>Model</th>'+c.targets.map(function(t){return '<th>'+esc(t.label)+'</th>'}).join('')+'</tr></thead><tbody>'+
+  c.rows.map(function(r){
+    var m=r.m.error?'<span class="chip bad">unreadable</span><div class="sub">'+esc(r.m.error)+'</div>':'<b class="mono">'+esc(r.type)+'</b><div class="sub">'+Object.keys(r.m.attrs).length+' attributes seen, '+r.m.total+' records, assoc: '+(r.m.assoc.join(', ')||'none seen')+'</div>';
+    return '<tr><td class="mono">'+esc(r.type)+'</td><td>'+m+'</td>'+c.targets.map(function(t){
+      var x=r.cells[t.id];
+      if(x.status==='absent')return '<td><span class="chip bad">Absent</span><div class="sub">'+esc(x.detail)+'</div></td>';
+      if(x.status==='n/a')return '<td><span class="chip mute">n/a</span></td>';
+      var head=x.ok?'<span class="chip ok">In sync</span>':'<span class="chip warn">Differences</span>';
+      return '<td>'+head+x.issues.map(function(i){var d=ISSUE[i.kind];if(i.kind==='similar')return '<div class="sub"><span class="chip info">probable match</span> model <code>'+esc(i.attr)+'</code> ≈ here <code>'+esc(i.as)+'</code> ('+Math.round(i.score*100)+'%)</div>';
+      return '<div class="sub"><span class="chip '+d[1]+'">'+d[0]+'</span> <code>'+esc(i.attr)+'</code>'+(i.want?' ('+esc(i.want)+(i.have?' vs '+esc(i.have):'')+')':i.have?' ('+esc(i.have)+')':'')+'</div>'}).join('')+'</td>';
+    }).join('')+'</tr>';
+  }).join('')+'</tbody></table></div>';
+}
+
+/* ---------- checklist and report ---------- */
+function report(){
+  var c=S.cmp,d=new Date().toISOString().slice(0,10),out=['# Custom object model comparison','','Model: **'+c.model.label+'** - generated '+d+' - inferred from records (read-only)','','## What to create in each target (Settings > Custom objects)',''];
+  c.targets.forEach(function(t){
+    out.push('### '+t.label,'');var n=0;
+    c.rows.forEach(function(r){
+      var x=r.cells[t.id];if(r.m.error)return;
+      if(x.status==='absent'){n++;out.push('- [ ] Create object type `'+r.type+'` with attributes: '+(Object.keys(r.m.attrs).map(function(k){return '`'+k+'` ('+r.m.attrs[k].type+')'}).join(', ')||'(none seen)')+(r.m.assoc.length?'; associations to: '+r.m.assoc.join(', '):''));return}
+      (x.issues||[]).forEach(function(i){
+        if(i.kind==='missing'){n++;var mv=r.m.attrs[i.attr]&&r.m.attrs[i.attr].values;out.push('- [ ] `'+r.type+'`: add attribute `'+i.attr+'` ('+i.want+')'+(i.want==='category?'&&mv&&mv.length?'; values seen in records (may be incomplete): '+mv.slice(0,25).join(', '):''))}
+        if(i.kind==='assoc-missing'){n++;out.push('- [ ] `'+r.type+'`: add association with `'+i.attr+'`')}
+        if(i.kind==='similar'){n++;out.push('- [ ] `'+r.type+'`: probable match, model `'+i.attr+'` ≈ target `'+i.as+'` ('+Math.round(i.score*100)+'%): decide to rename it in the target or keep it, do not create a duplicate')}
+        if(i.kind==='type'){n++;out.push('- [ ] `'+r.type+'`: attribute `'+i.attr+'` is '+i.have+', model has '+i.want+' (check by hand; type cannot be changed in place)')}
+      });
+    });
+    if(!n)out.push('Nothing to create.');out.push('');
+  });
+  if(c.variants.length){out.push('## Naming variants across accounts (probable matches)','');c.variants.forEach(function(x){out.push('- `'+x.type+'`: `'+x.a+'` ('+x.aa.join(', ')+') ≈ `'+x.b+'` ('+x.bb.join(', ')+'), '+Math.round(x.s*100)+'%: pick one spelling')});out.push('')}
+  out.push('## Limits of this inference','','- Only the first 3000 records of each type are read, and only attributes that have a value in them are seen. Empty attributes are invisible.','- Category attributes cannot be told from text in the data: names ending in `_cat` are shown as `category?`. Listed values are only the ones seen in the sampled records, not the accepted options. Read the exact type and options in Settings > Custom objects.','- Primary attribute, attribute order and the direction of associations (one-to-many, many-to-many) are not available.','- Object types must be listed by hand: no endpoint lists them.');
+  return out.join('\n');
+}
+function renderReport(){
+  var el=$('#p-report');
+  if(!S.cmp){el.innerHTML='<div class="empty">Compare accounts first.</div>';return}
+  el.innerHTML='<div class="note warn"><b>Read-only inference.</b> Brevo documents no schema endpoint (only records), so this version reads the model from sampled records. Treat the checklist as a starting point and confirm in the UI.</div>'+
+  '<textarea id="rep" readonly aria-label="Markdown report"></textarea><div class="row"><button class="btn sm" data-act="copyrep">Copy report</button><button class="btn sm" data-act="copyjson">Copy model as JSON</button></div>';
+  $('#rep').value=report();
+}
+
+/* ---------- accounts ---------- */
+function renderAccounts(){
+  var el=$('#p-accounts');if(!el)return;
+  var rows=S.accounts.map(function(a){
+    var st=a.status==='ok'?'<span class="chip ok">Loaded</span> '+esc(a.info):a.status==='error'?'<span class="chip bad">Failed</span> '+esc(a.info):a.status==='loading'?esc(a.info):'<span class="muted">Not loaded yet</span>';
+    return '<div class="acct" data-id="'+a.id+'"><input type="text" data-f="label" aria-label="Account name" placeholder="Account name" value="'+esc(a.label)+'"><input type="password" data-f="key" aria-label="API key" placeholder="xkeysib-..." autocomplete="off" spellcheck="false" value="'+esc(a.key)+'"><label class="radio"><input type="radio" name="model" data-f="model" '+(a.isModel?'checked':'')+'> Model</label><button class="btn sm" data-act="rm">Remove</button><div class="st">'+st+'</div></div>';
+  }).join('');
+  el.innerHTML='<div class="note"><b>Custom objects need an Enterprise or Pro plan</b> and are in beta. Keys stay in this tab\'s memory and are never logged in full.</div>'+
+  '<div><h2>Accounts</h2><p class="muted">One v3 API key per account, and the model account.</p></div><div>'+rows+'</div><div class="row"><button class="btn sm" data-act="add">Add account</button></div>'+
+  '<div><h2>Object types to compare</h2><p class="muted">Comma-separated object type IDs (as in the Advanced parameters of the object). No endpoint lists them.</p></div>'+
+  '<input type="text" id="types" aria-label="Object types" placeholder="vehicle, garage" value="'+esc(S.types)+'">'+
+  '<div class="row"><button class="btn primary" data-act="load">Load models and compare</button><button class="btn" data-act="demo">Try with demo data</button><button class="btn" data-act="clear">Clear keys</button></div><div id="flash" role="status"></div>';
+}
+function flash(m){var f=$('#flash');if(f){f.textContent=m;setTimeout(function(){if(f.textContent===m)f.textContent=''},4000)}}
+function renderLogs(){
+  var el=$('#p-logs');if(!el)return;var cls={ok:'ok',warn:'warn',error:'bad',info:'info'};
+  el.innerHTML='<div><h2>History</h2><p class="muted">Every request. Keys appear only as their last four characters.</p></div><div class="row"><button class="btn sm" data-act="clearlog">Clear history</button></div>'+
+  (S.logs.length?S.logs.slice().reverse().map(function(l){return '<details class="log"><summary><span class="mono muted">'+l.ts+'</span><span class="chip '+cls[l.level]+'">'+esc(l.status)+'</span><span>'+esc(l.acct)+'</span><span class="mono">'+esc(l.req)+'</span></summary><pre>'+esc(bodyText(l.body))+'</pre></details>'}).join(''):'<div class="empty">No requests yet.</div>');
+}
+
+/* ---------- demo ---------- */
+function rec(id,at,as){return {identifiers:{id:String(id)},attributes:at,associations:(as||[]).map(function(t){return {object_type:t,records:[]}})}}
+function demoAccounts(){
+  var m=newAcct('Model - France',true),a=newAcct('Target - Spain',false);
+  m.mock={vehicle:[rec(1,{plate:'AB-123',brand:'Renault',year:2021,electric:true,bought_on:'2022-01-05',checkout_date:'2022-02-01',phone_2:'1',phone_3:'2',segment_cat:'Individuel'},['contact','garage']),rec(2,{plate:'AB-124',segment_cat:'Tour Operateur'})],garage:[rec(1,{name:'Paris 11',capacity:40})]};
+  a.mock={vehicle:[rec(1,{plate:'ZZ-999',brand:'Seat',year:'2020',ckeckout_date:'2022-02-01',phone_2:'1',phone3:'2',segment_cat:'Individuel'},['contact'])]};
+  [m,a].forEach(function(x){x.demo=true;x.key='demo'});return [m,a];
+}
+function mockGet(a,path){
+  var mm=path.match(/^\/objects\/([^/]+)\/records/);
+  if(!mm)return {ok:false,status:404,data:{message:'Not found (demo)'}};
+  var t=decodeURIComponent(mm[1]);if(!a.mock[t])return {ok:false,status:400,data:{message:'invalid object_type'}};
+  return {ok:true,status:200,data:{count:a.mock[t].length,records:a.mock[t]}};
+}
+
+/* ---------- tabs and events ---------- */
+function showTab(){
+  ['accounts','compare','report','logs'].forEach(function(t){$('#p-'+t).hidden=S.tab!==t});
+  document.querySelectorAll('#tabs button').forEach(function(b){b.setAttribute('aria-selected',String(b.dataset.tab===S.tab))});
+  if(S.tab==='compare')renderCompare();if(S.tab==='report')renderReport();if(S.tab==='logs')renderLogs();
+}
+$('#tabs').addEventListener('click',function(e){var b=e.target.closest('button');if(b){S.tab=b.dataset.tab;showTab()}});
+document.addEventListener('input',function(e){
+  var t=e.target,row=t.closest('.acct');
+  if(row){var a=S.accounts.filter(function(x){return x.id===row.dataset.id})[0];if(a&&t.dataset.f==='label')a.label=t.value;if(a&&t.dataset.f==='key')a.key=t.value}
+  if(t.id==='types')S.types=t.value;
+});
+document.addEventListener('change',function(e){var t=e.target;if(t.id==='erdt'){S.erdT=t.value;renderCompare()}if(t.id==='erdd'){S.erdDiff=t.checked;renderCompare()}if(t.dataset&&t.dataset.f==='model'){var id=t.closest('.acct').dataset.id;S.accounts.forEach(function(a){a.isModel=a.id===id})}});
+function copy(txt,ta){if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(txt).then(function(){},function(){})}else if(ta){ta.select()}}
+document.addEventListener('click',function(e){
+  var b=e.target.closest('[data-act]');if(!b)return;var act=b.dataset.act;
+  if(act==='add'){S.accounts.push(newAcct('Target '+S.accounts.length,false));renderAccounts()}
+  else if(act==='rm'){var id=b.closest('.acct').dataset.id;S.accounts=S.accounts.filter(function(a){return a.id!==id});if(S.accounts.length&&!S.accounts.some(function(a){return a.isModel}))S.accounts[0].isModel=true;renderAccounts()}
+  else if(act==='load'){loadAll()}
+  else if(act==='demo'){S.accounts=demoAccounts();S.types='vehicle, garage';renderAccounts();log('info',null,'Demo data loaded','-',0,'Two simulated accounts, no network calls.');loadAll()}
+  else if(act==='clear'){S.accounts.forEach(function(a){a.key='';a.model=null;a.status='idle';a.info='';a.demo=false;a.mock=null});S.cmp=null;renderAccounts();flash('Keys cleared from memory.')}
+  else if(act==='copyrep'){copy($('#rep').value,$('#rep'))}
+  else if(act==='copyjson'&&S.cmp){copy(JSON.stringify(S.cmp.model.model,null,2))}
+  else if(act==='clearlog'){S.logs=[];renderLogs()}
+});
+renderAccounts();renderLogs();showTab();
+})();
+</script></body></html>
