@@ -117,7 +117,6 @@ function inferType(recs,type){
   Object.keys(attrs).sort().forEach(function(k){
     var ks=Object.keys(attrs[k].kinds);
     var ty=ks.length===0?'unknown (always empty)':ks.length===1?ks[0]:'text (mixed: '+ks.join('/')+')';
-    if(ty==='text'&&/_cat$/i.test(k))ty='category?';
     out.attrs[k]={type:ty,seen:attrs[k].seen,values:(ks.length===1&&ks[0]==='text'&&!attrs[k].over)?Object.keys(attrs[k].vals).sort():null};
   });
   return out;
@@ -279,7 +278,7 @@ function report(){
       var x=r.cells[t.id];if(r.m.error)return;
       if(x.status==='absent'){n++;out.push('- [ ] Create object type `'+r.type+'` with attributes: '+(Object.keys(r.m.attrs).map(function(k){return '`'+k+'` ('+r.m.attrs[k].type+')'}).join(', ')||'(none seen)')+(r.m.assoc.length?'; associations to: '+r.m.assoc.join(', '):''));return}
       (x.issues||[]).forEach(function(i){
-        if(i.kind==='missing'){n++;var mv=r.m.attrs[i.attr]&&r.m.attrs[i.attr].values;out.push('- [ ] `'+r.type+'`: add attribute `'+i.attr+'` ('+i.want+')'+(i.want==='category?'&&mv&&mv.length?'; values seen in records (may be incomplete): '+mv.slice(0,25).join(', '):''))}
+        if(i.kind==='missing'){n++;var mv=r.m.attrs[i.attr]&&r.m.attrs[i.attr].values;out.push('- [ ] `'+r.type+'`: add attribute `'+i.attr+'` ('+i.want+')'+(i.want==='text'&&mv&&mv.length&&mv.length<=15?'; only '+mv.length+' distinct values seen, possibly a category in Brevo (accepted options are not readable from records): '+mv.join(', '):''))}
         if(i.kind==='assoc-missing'){n++;out.push('- [ ] `'+r.type+'`: add association with `'+i.attr+'`')}
         if(i.kind==='similar'){n++;out.push('- [ ] `'+r.type+'`: probable match, model `'+i.attr+'` ≈ target `'+i.as+'` ('+Math.round(i.score*100)+'%): decide to rename it in the target or keep it, do not create a duplicate')}
         if(i.kind==='type'){n++;out.push('- [ ] `'+r.type+'`: attribute `'+i.attr+'` is '+i.have+', model has '+i.want+' (check by hand; type cannot be changed in place)')}
@@ -288,7 +287,7 @@ function report(){
     if(!n)out.push('Nothing to create.');out.push('');
   });
   if(c.variants.length){out.push('## Naming variants across accounts (probable matches)','');c.variants.forEach(function(x){out.push('- `'+x.type+'`: `'+x.a+'` ('+x.aa.join(', ')+') ≈ `'+x.b+'` ('+x.bb.join(', ')+'), '+Math.round(x.s*100)+'%: pick one spelling')});out.push('')}
-  out.push('## Limits of this inference','','- Only the first 3000 records of each type are read, and only attributes that have a value in them are seen. Empty attributes are invisible.','- Category attributes cannot be told from text in the data: names ending in `_cat` are shown as `category?`. Listed values are only the ones seen in the sampled records, not the accepted options. Read the exact type and options in Settings > Custom objects.','- Primary attribute, attribute order and the direction of associations (one-to-many, many-to-many) are not available.','- Object types must be listed by hand: no endpoint lists them.');
+  out.push('## Limits of this inference','','- Only the first 3000 records of each type are read, and only attributes that have a value in them are seen. Empty attributes are invisible.','- Category attributes cannot be told from text in the data, and naming conventions are not used to guess (they differ between accounts and teams). Values listed are only those seen in the sampled records, not the accepted options. Read the exact type and options in Settings > Custom objects.','- Primary attribute, attribute order and the direction of associations (one-to-many, many-to-many) are not available.','- Object types must be listed by hand: no endpoint lists them.');
   return out.join('\n');
 }
 function renderReport(){
