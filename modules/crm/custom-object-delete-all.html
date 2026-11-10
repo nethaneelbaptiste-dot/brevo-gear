@@ -113,19 +113,19 @@ function summary(d){if(d&&d.records)return {count:d.count,records:d.records.leng
 function pool(items,n,fn){var i=0;return Promise.all(Array.from({length:Math.min(n,items.length)},async function(){while(i<items.length&&!S.stop){var x=items[i++];await fn(x)}}))}
 
 /* ---------- step 1: read every record ID of a type (nothing is deleted here) ---------- */
-var VARS=[{name:'association=false',q:'&association=false'},{name:'association=true',q:'&association=true'},{name:'sort=asc',q:'&association=false&sort=asc'},{name:'association=true&sort=asc',q:'&association=true&sort=asc'}];
+var VARS=[{name:'association=false',q:'&association=false'},{name:'association=true',q:'&association=true'},{name:'sort=asc',q:'&association=false&sort=asc'},{name:'association=true&sort=asc',q:'&association=true&sort=asc'},{name:'limit=100',lim:100,q:'&association=false'},{name:'limit=10',lim:10,q:'&association=false'}];
 async function scanType(row){
   var a=row.a,ids=[],exts=[],seen={},page=1,total=null,read=0,noid=0,viaExt=0,shape=null,vi=0;
   while(page<=MAXPAGES&&!S.stop){
     row.status='Reading page '+page+' ('+fmt(read)+' records so far)';renderRes();
-    var r=await api(a,'GET','/objects/'+encodeURIComponent(row.type)+'/records?limit='+PAGE+'&page_num='+page+VARS[vi].q);
+    var r=await api(a,'GET','/objects/'+encodeURIComponent(row.type)+'/records?limit='+(VARS[vi].lim||PAGE)+'&page_num='+page+VARS[vi].q);
     if(r.stopped){row.status='Stopped';return}
     if(!r.ok){row.error=errMsg(r)+' (HTTP '+r.status+')';row.status='Read failed';return}
     var got=r.data.records||[];if(total===null)total=r.data.count==null?got.length:r.data.count;
     /* count says records exist but the list is empty on page 1: try the other documented query variants */
     while(page===1&&!got.length&&total>0&&vi<VARS.length-1&&!S.stop){
       vi++;row.status='List empty, trying variant '+VARS[vi].name;renderRes();
-      r=await api(a,'GET','/objects/'+encodeURIComponent(row.type)+'/records?limit='+PAGE+'&page_num=1'+VARS[vi].q);
+      r=await api(a,'GET','/objects/'+encodeURIComponent(row.type)+'/records?limit='+(VARS[vi].lim||PAGE)+'&page_num=1'+VARS[vi].q);
       if(r.stopped){row.status='Stopped';return}
       if(r.ok)got=r.data.records||[];
     }
@@ -143,14 +143,14 @@ async function scanType(row){
   row.count=total||0;row.noid=noid;row.ids=ids.concat(exts);row.remaining=row.count;
   var bs=[];chunk(ids,PAGE).forEach(function(c){bs.push({kind:'ids',ids:c})});chunk(exts,PAGE).forEach(function(c){bs.push({kind:'ext_ids',ids:c})});
   row.batches=bs.map(function(b,i){return {n:i+1,kind:b.kind,ids:b.ids,size:b.ids.length,state:'planned',processId:null,pstate:null,error:null}});
-  row.status=S.stop?'Stopped':row.ids.length?'Ready':row.count?'Not deletable':'Empty';
+  row.status=S.stop?'Stopped':row.ids.length?'Ready':row.count?'Ghost records only?':'Empty';
   if(!S.stop){
     var m=[];
     if(viaExt)m.push(fmt(viaExt)+' record(s) have no id and are deleted by ext_id');
     if(noid)m.push(fmt(noid)+' record(s) have neither id nor ext_id and cannot be deleted by this API');
     if(!noid&&!viaExt&&read<row.count)m.push('read '+fmt(read)+' of '+fmt(row.count)+' reported (records may have changed during the scan); a second run removes what is left');
     if(row.variant)m.unshift('the default list was empty; records were read with '+row.variant);
-    if(row.count&&!row.ids.length){row.error=row.variantFail?'Brevo counts '+fmt(row.count)+' record(s) but the list endpoint returns none, even with association=true and sort=asc. These records can be counted but not listed, so this tool cannot target them.':'Brevo reports '+fmt(row.count)+' record(s) but none can be targeted.'}
+    if(row.count&&!row.ids.length){row.error=row.variantFail?'Brevo counts '+fmt(row.count)+' record(s) but the list returns none with any query variant. This matches Brevo\'s known "ghost records" issue: hidden empty placeholders that are counted but cannot be listed or deleted through the API. Nothing is left for this tool to delete; Brevo engineering has to clean them up and recalculate the counter.':'Brevo reports '+fmt(row.count)+' record(s) but none can be targeted.'}
     if(m.length)row.warn=m.join('. ')+'.'+(shape&&(noid||row.error)?' First record: '+shape+'.':'');
   }
 }
@@ -226,7 +226,7 @@ async function verify(){
 /* ---------- rendering ---------- */
 function totals(){return S.plan.reduce(function(t,r){t.rec+=r.ids.length;t.bat+=r.batches.length;t.rem+=Math.max(0,(r.remaining||0)-(r.noid||0));t.unt=(t.unt||0)+(r.noid||0);return t},{rec:0,bat:0,rem:0})}
 function rowChip(r){
-  var s=r.status,c=r.error?'bad':/^Done/.test(s)?'warn':s==='Empty'?'ok':/^Ready/.test(s)?'warn':/^(Deleting|Reading|Sending)/.test(s)?'info':/Not empty|Stopped|Not deletable/.test(s)?'bad':'mute';
+  var s=r.status,c=r.error?'bad':/^Done/.test(s)?'warn':s==='Empty'?'ok':/^Ready/.test(s)?'warn':/^(Deleting|Reading|Sending)/.test(s)?'info':/Not empty|Stopped|Ghost records/.test(s)?'bad':'mute';
   return '<span class="chip '+c+'">'+esc(s)+'</span>';
 }
 function batchLine(r){
@@ -264,7 +264,7 @@ function renderRes(){
   if(S.phase==='scanning')h+='<div class="note">Scanning. <button class="btn sm" data-act="stop">Stop</button></div>';
   if(S.phase==='scanned'){
     var failed=S.plan.filter(function(r){return r.error&&!r.ids.length}).length;
-    if(t.rec===0){var cnt=S.plan.reduce(function(n,r){return n+(r.count||0)},0);h+=cnt?'<div class="note bad"><b>Nothing can be deleted.</b> Brevo reports '+fmt(cnt)+' record(s), but none has an id or ext_id this API can target. See the details in the table and the History tab.</div>':'<div class="note">Nothing to delete: every listed object type is already empty'+(failed?' or could not be read':'')+'.</div>'}
+    if(t.rec===0){var cnt=S.plan.reduce(function(n,r){return n+(r.count||0)},0);h+=cnt?'<div class="note bad"><b>Nothing can be deleted through the API.</b> Brevo counts '+fmt(cnt)+' record(s) but lists none: most likely hidden ghost records (known Brevo issue, fixed by a backend cleanup and counter recalculation, not by the API). See the details in the table.</div>':'<div class="note">Nothing to delete: every listed object type is already empty'+(failed?' or could not be read':'')+'.</div>'}
     else if(S.dry)h+='<div class="note warn"><b>Dry run.</b> '+fmt(t.rec)+' record(s) in '+t.bat+' batch(es) would be deleted'+(multi?' across '+S.accounts.filter(function(a){return S.plan.some(function(r){return r.a===a&&r.ids.length})}).length+' account(s)':'')+'. Nothing was sent. Untick “Dry run” above to unlock the deletion.</div>';
     else{
       var e=estimate();
