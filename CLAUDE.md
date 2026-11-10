@@ -4,7 +4,7 @@ Brevo Gear is a static internal tool hub (GitHub Pages, repo `nethaneelbaptiste-
 
 ## Structure
 - `index.html` hub, `modules/<module>/index.html` module page, `modules/<module>/<tool>.html` one self-contained tool per file. Relative links only, no build step.
-- Modules: `crm` (Contacts model replication, Custom objects model comparison), `mcp` (MCP Prompt Runner). CDP, LTY, WLT are "coming soon" cards.
+- Modules: `crm` (Contacts model replication, Custom objects model comparison, Custom objects delete all records), `mcp` (MCP Prompt Runner). CDP, LTY, WLT are "coming soon" cards.
 - New tool: start from `templates/tool-template.html`, add a card in the module index, check links with `python3 -m http.server`, push to `main`.
 
 ## Rules
@@ -15,7 +15,7 @@ Brevo Gear is a static internal tool hub (GitHub Pages, repo `nethaneelbaptiste-
 
 ## Context and history (Claude project "Brevo Gear")
 Specs, skills and decisions live in the Claude project docs under `CRM Models/`: `Brevo Gear micro-app structure.md`, `Brevo Contacts model replication/` (spec, SKILL.md, assets), `Brevo MCP Prompt Runner/`. Read the relevant doc before changing a tool, and write decisions back there after the work (project instruction: save outputs as a skill and as a spec).
-Skills: `brevo-gear` (hub conventions), `brevo-contacts-model-sync`, `brevo-custom-object-model-sync`.
+Skills: `brevo-gear` (hub conventions), `brevo-contacts-model-sync`, `brevo-custom-object-model-sync`, `brevo-custom-object-delete-all`.
 
 ## Brand
 Brevo tokens: brand #004228, band #C0FFA5, CRM #0B996E, MCP #004228, CDP #1EB8B8, LTY #FDC802, WLT #6358DE. Fonts Alexandria (headings) and Inter. Light and dark via `prefers-color-scheme`.

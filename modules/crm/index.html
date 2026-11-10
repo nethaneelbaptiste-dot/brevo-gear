@@ -81,6 +81,14 @@ footer{padding-top:24px;border-top:1px solid var(--line);font-size:14px;color:va
         <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
       </div>
     </a>
+    <a class="card" href="custom-object-delete-all.html">
+      <h3>Custom objects: delete all records</h3>
+      <p>Empty one or several custom object types of a single account. Reads every record ID, sends the 1,000-record delete batches in parallel, then recounts until the type is empty. Dry run first, typed DELETE before anything is removed.</p>
+      <div class="tags"><span class="tag">REST API v3</span><span class="tag">Dry run</span><span class="tag">Destructive</span><span class="tag">Demo data</span></div>
+      <div class="foot"><span>Open tool</span>
+        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
+      </div>
+    </a>
   </section>
 
   <section class="rules" aria-label="Before you run">
@@ -89,6 +97,7 @@ footer{padding-top:24px;border-top:1px solid var(--line);font-size:14px;color:va
       <li>API keys stay in the tab's memory. Do not paste them in chat.</li>
       <li>Deleting is offered only on attributes whose type differs, and needs a typed confirmation.</li>
       <li>Custom objects need an Enterprise or Pro plan. The custom object tool infers the model from records and creates nothing.</li>
+      <li>Delete all records has no undo and removes the records' associations. Run the dry run first.</li>
       <li>Check the rate-limit tier of each account first. The Default tier can answer 429 for minutes.</li>
     </ul>
   </section>

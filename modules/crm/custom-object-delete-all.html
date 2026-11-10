@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>Custom Object Delete All</title><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap"><style>
+/* v0.1: empties one or several custom object types of ONE Brevo account. Dry run by default, typed DELETE before any live deletion. */
+:root{--bg:#f2f5f4;--surface:#fff;--surface2:#e8eeec;--line:#d2dcd8;--fg:#13201b;--muted:#566862;--accent:#0a7d5a;--accent-fg:#fff;--ok:#17794a;--ok-bg:#dff2e7;--warn:#8f5700;--warn-bg:#faedcf;--bad:#a8231b;--bad-bg:#fbe0dd;--info:#2352a3;--info-bg:#e0e8f8;--font-body:'IBM Plex Sans',system-ui,sans-serif;--font-mono:'IBM Plex Mono',ui-monospace,monospace;--font-display:'Bricolage Grotesque','IBM Plex Sans',sans-serif}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0e1513;--surface:#151e1b;--surface2:#1d2925;--line:#2b3a35;--fg:#e3ece8;--muted:#8fa39b;--accent:#3dd6a6;--accent-fg:#04231a;--ok:#62d69a;--ok-bg:#183a2a;--warn:#f0b955;--warn-bg:#3b2d10;--bad:#ff8b80;--bad-bg:#42191a;--info:#8fb2ff;--info-bg:#1b2a4a;color-scheme:dark}}
+*{box-sizing:border-box}[hidden]{display:none!important}
+body{background:var(--bg);color:var(--fg);font-family:var(--font-body);font-size:14px;line-height:1.5;margin:0;padding:20px max(16px,env(safe-area-inset-right,0px)) 48px max(16px,env(safe-area-inset-left,0px))}
+.wrap{max-width:1180px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+h1{font-family:var(--font-display);font-size:26px;line-height:1.15;margin:0}h2{font-size:15px;margin:0 0 4px}p{margin:0}
+code,.mono{font-family:var(--font-mono);font-size:12.5px}.muted{color:var(--muted)}
+nav{display:flex;gap:4px;flex-wrap:wrap;border-bottom:1px solid var(--line)}
+nav button{background:none;border:0;border-bottom:2px solid transparent;padding:10px 14px;font:inherit;font-weight:500;color:var(--muted);cursor:pointer;margin-bottom:-1px}
+nav button[aria-selected="true"]{color:var(--fg);border-bottom-color:var(--accent)}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:18px;display:flex;flex-direction:column;gap:14px;min-width:0}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+button,input{font:inherit;color:var(--fg)}
+.btn{background:var(--surface2);border:1px solid var(--line);border-radius:6px;padding:8px 14px;cursor:pointer;font-weight:500}.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}.btn.danger{background:var(--bad);border-color:var(--bad);color:#fff}.btn:disabled{opacity:.45;cursor:not-allowed}.btn.sm{padding:4px 10px;font-size:12.5px}
+input[type=text],input[type=password]{background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:8px 10px;min-width:0}input[type=password]{font-family:var(--font-mono)}
+.field{display:flex;flex-direction:column;gap:4px}.field label{font-weight:600;font-size:13px}
+.radio{display:flex;gap:8px;align-items:center}
+.chip{display:inline-block;font-size:11.5px;font-weight:600;padding:2px 8px;border-radius:4px;white-space:nowrap}.chip.ok{background:var(--ok-bg);color:var(--ok)}.chip.bad{background:var(--bad-bg);color:var(--bad)}.chip.warn{background:var(--warn-bg);color:var(--warn)}.chip.info{background:var(--info-bg);color:var(--info)}.chip.mute{background:var(--surface2);color:var(--muted)}
+.note{font-size:12.5px;color:var(--muted);background:var(--surface2);padding:8px 12px;border-radius:6px}.note.warn{background:var(--warn-bg);color:var(--warn)}.note.bad{background:var(--bad-bg);color:var(--bad)}.note ul{margin:4px 0 0;padding-left:18px}
+.tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:8px}table.mx{border-collapse:collapse;width:100%;min-width:640px}
+.mx th,.mx td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}.mx th{font-size:11.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);background:var(--surface2)}.mx tr:last-child td{border-bottom:0}.mx td.n{text-align:right;font-family:var(--font-mono)}
+.sub{font-size:12px;color:var(--muted);margin-top:2px;overflow-wrap:anywhere}
+.bar{height:6px;border-radius:3px;background:var(--surface2);overflow:hidden;margin-top:6px}.bar i{display:block;height:100%;background:var(--accent);transition:width .3s}
+.confirm{border:2px solid var(--bad);border-radius:8px;padding:14px;display:flex;flex-direction:column;gap:10px}
+.log{border-top:1px solid var(--line);padding:6px 0;font-size:12.5px}.log summary{cursor:pointer;display:flex;gap:10px;flex-wrap:wrap;align-items:center}.log pre{margin:8px 0 4px;padding:10px;background:var(--bg);border:1px solid var(--line);border-radius:6px;white-space:pre-wrap;overflow-wrap:anywhere;font-family:var(--font-mono);font-size:12px;max-height:240px;overflow:auto}
+.empty{padding:28px 12px;text-align:center;color:var(--muted)}#flash{font-size:12.5px;color:var(--ok);min-height:18px}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr));gap:14px}
+</style></head><body><div class="wrap">
+<header><div><a href="index.html" style="font-size:13px;font-weight:600;color:var(--accent);text-decoration:none">← CRM Models</a>
+<h1>Custom Object Delete All</h1>
+<p class="muted">Empty one or several custom object types of a Brevo account. Brevo deletes at most 1,000 records per call and does it asynchronously, so this tool reads every record ID, sends the batches, then checks the record count until it reaches 0. Dry run by default.</p></div></header>
+<nav role="tablist" id="tabs">
+<button role="tab" data-tab="run" aria-selected="true">1 · Delete records</button>
+<button role="tab" data-tab="logs" aria-selected="false">2 · History</button></nav>
+<section class="panel" id="p-run"></section><section class="panel" id="p-logs" hidden></section>
+</div>
+<script>
+(function(){
+'use strict';
+var BASE='https://api.brevo.com/v3',PAGE=1000,MAXPAGES=2000,VERIFY_MS=180000,TICK_MS=4000,DONE={completed:1,failed:1,cancelled:1};
+function $(s){return document.querySelector(s)}
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
+function sleep(ms){return new Promise(function(r){setTimeout(r,ms)})}
+function mask(k){return k?'••••'+String(k).slice(-4):''}
+function fmt(n){return Number(n).toLocaleString('en-US')}
+function chunk(a,n){var o=[];for(var i=0;i<a.length;i+=n)o.push(a.slice(i,i+n));return o}
+var S={tab:'run',key:'',types:'',dry:true,demo:false,mock:null,phase:'idle',plan:[],logs:[],stop:false,confirm:''};
+
+/* ---------- logging: key shown as last four characters only, record IDs never logged ---------- */
+function log(level,req,status,ms,body){S.logs.push({ts:new Date().toLocaleTimeString('fr-FR'),level:level,req:req,status:status,ms:ms,body:body});renderLogs()}
+function bodyText(d){try{var t=typeof d==='string'?d:JSON.stringify(d,null,2);return t.length>3000?t.slice(0,3000)+'\n... truncated':t}catch(e){return String(d)}}
+function errMsg(r){var d=r&&r.data;return (d&&(d.message||d.code))||(typeof d==='string'&&d)||('HTTP '+(r?r.status:'?'))}
+
+/* ---------- API: GET and POST, 429 retry honoring x-sib-ratelimit-reset ---------- */
+async function api(method,path,body){
+  var t0=performance.now(),req=method+' '+path.split('?')[0]+'  (api-key '+mask(S.key)+')';
+  if(S.demo){await sleep(60);var m=mockApi(method,path,body);log(m.ok?'ok':'error',req+' [demo]',m.status,60,summary(m.data));return m}
+  for(var n=0;n<=3;n++){
+    try{
+      var opt={method:method,headers:{'api-key':S.key,'accept':'application/json'}};
+      if(body){opt.headers['content-type']='application/json';opt.body=JSON.stringify(body)}
+      var res=await fetch(BASE+path,opt);
+      if(res.status===429&&n<3){
+        var rs=parseFloat(res.headers.get('x-sib-ratelimit-reset')),w=isFinite(rs)&&rs>0?Math.min(rs*1000+200,15000):2000*Math.pow(2,n)+Math.round(Math.random()*400);
+        log('warn',req,429,Math.round(performance.now()-t0),'Rate limited, waiting '+Math.round(w)+' ms');await sleep(w);continue}
+      var txt=await res.text(),data=txt;try{data=txt?JSON.parse(txt):{}}catch(e){}
+      log(res.ok?'ok':'error',req,res.status,Math.round(performance.now()-t0),res.ok?summary(data):data);
+      return {ok:res.ok,status:res.status,data:data};
+    }catch(e){
+      var msg='Network error (offline, or the page is an embedded Claude artifact whose CSP blocks api.brevo.com). Open this file from Brevo Gear or locally.';
+      log('error',req,'ERR',Math.round(performance.now()-t0),msg);return {ok:false,status:0,data:{message:msg}};
+    }
+  }
+}
+function summary(d){if(d&&d.records)return {count:d.count,records:d.records.length};return d}
+
+/* ---------- step 1: read every record ID of a type (nothing is deleted here) ---------- */
+async function scanType(row){
+  var ids=[],seen={},page=1,total=null;
+  while(page<=MAXPAGES&&!S.stop){
+    row.status='Reading page '+page+' ('+fmt(ids.length)+' IDs so far)';renderRes();
+    var r=await api('GET','/objects/'+encodeURIComponent(row.type)+'/records?limit='+PAGE+'&page_num='+page+'&association=false');
+    if(!r.ok){row.error=errMsg(r)+' (HTTP '+r.status+')';row.status='Read failed';return}
+    var got=r.data.records||[];if(total===null)total=r.data.count==null?got.length:r.data.count;
+    got.forEach(function(x){var id=x&&x.identifiers&&x.identifiers.id;if(id!==undefined&&id!==null&&!seen[id]){seen[id]=1;ids.push(id)}});
+    if(!got.length||ids.length>=total)break;page++;
+  }
+  row.count=total||0;row.ids=ids;row.remaining=row.count;
+  row.batches=chunk(ids,PAGE).map(function(c,i){return {n:i+1,ids:c,size:c.length,state:'planned',processId:null,pstate:null,untracked:false,error:null}});
+  row.status=ids.length?'Ready':'Empty';
+  if(ids.length<row.count)row.error='Read '+fmt(ids.length)+' IDs of '+fmt(row.count)+' reported. Scan again before deleting.';
+}
+async function scan(){
+  var types=S.types.split(',').map(function(t){return t.trim()}).filter(Boolean).filter(function(t,i,a){return a.indexOf(t)===i});
+  if(!S.demo&&!S.key.trim()){flash('Enter an API key.');return}
+  if(!types.length){flash('List at least one object type.');return}
+  S.stop=false;S.confirm='';S.phase='scanning';
+  S.plan=types.map(function(t){return {type:t,status:'Waiting',count:null,ids:[],batches:[],remaining:null,error:null}});renderRes();
+  for(var i=0;i<S.plan.length;i++)await scanType(S.plan[i]);
+  S.phase='scanned';renderRes();
+}
+
+/* ---------- step 2: send all batches in parallel (ids only, 1000 max per call) ---------- */
+async function destroy(){
+  var jobs=[];S.phase='deleting';S.stop=false;
+  S.plan.forEach(function(row){row.batches.forEach(function(b){b.state='sending';jobs.push({row:row,b:b})});row.status=row.batches.length?'Sending batches':row.status});renderRes();
+  log('info','Live deletion started','-',0,jobs.length+' batch(es) of up to '+PAGE+' records, sent in parallel.');
+  await Promise.allSettled(jobs.map(async function(j){
+    var r=await api('POST','/objects/'+encodeURIComponent(j.row.type)+'/batch/delete',{identifiers:{ids:j.b.ids}});
+    if(r.ok&&r.data&&r.data.processId!=null){j.b.state='accepted';j.b.processId=r.data.processId}
+    else if(r.ok){j.b.state='accepted'}
+    else{j.b.state='rejected';j.b.error=errMsg(r)+' (HTTP '+r.status+')'}
+    renderRes();
+  }));
+  await verify();
+}
+
+/* ---------- step 3: poll processes (best effort) and recount records (authoritative) ---------- */
+async function pollProcess(b){
+  var r=await api('GET','/processes/'+encodeURIComponent(b.processId));
+  if(r.ok&&r.data&&r.data.status){b.pstate=r.data.status;if(r.data.status==='failed'||r.data.status==='cancelled')b.error='Process '+r.data.status+(r.data.info?': '+bodyText(r.data.info):'')}
+  else if(r.status===404||r.status===400){b.untracked=true}
+}
+async function recount(row){
+  var r=await api('GET','/objects/'+encodeURIComponent(row.type)+'/records?limit=1&page_num=1&association=false');
+  if(r.ok)row.remaining=r.data.count==null?(r.data.records||[]).length:r.data.count;else row.recountError=errMsg(r);
+}
+async function verify(){
+  S.phase='verifying';var t0=Date.now();
+  while(!S.stop){
+    var work=[];
+    S.plan.forEach(function(row){
+      row.batches.forEach(function(b){if(b.processId!=null&&!b.untracked&&!DONE[b.pstate])work.push(pollProcess(b))});
+      if(row.batches.length)work.push(recount(row));
+    });
+    await Promise.all(work);
+    S.plan.forEach(function(row){if(row.batches.length)row.status=row.remaining===0?'Empty':'Deleting ('+fmt(row.remaining)+' left)'});
+    renderRes();
+    var left=S.plan.reduce(function(s,r){return s+(r.batches.length?(r.remaining||0):0)},0);
+    var rejectedAll=S.plan.every(function(r){return r.batches.every(function(b){return b.state==='rejected'})});
+    if(left===0||rejectedAll)break;
+    if(Date.now()-t0>VERIFY_MS){break}
+    await sleep(TICK_MS);
+  }
+  S.plan.forEach(function(row){if(row.batches.length)row.status=row.remaining===0?'Empty':(S.stop?'Stopped watching':'Not empty yet')});
+  S.phase='done';renderRes();
+  log('info','Run finished','-',0,S.plan.map(function(r){return r.type+': '+(r.remaining==null?'?':r.remaining)+' remaining'}).join('; '));
+}
+
+/* ---------- rendering ---------- */
+function totals(){return S.plan.reduce(function(a,r){a.rec+=r.ids.length;a.bat+=r.batches.length;a.rem+=r.remaining||0;return a},{rec:0,bat:0,rem:0})}
+function rowChip(r){
+  var s=r.status,c=r.error&&s!=='Ready'?'bad':s==='Empty'?'ok':/^Ready/.test(s)?'warn':/^(Deleting|Reading|Sending)/.test(s)?'info':/failed|Not empty/.test(s)?'bad':'mute';
+  return '<span class="chip '+c+'">'+esc(s)+'</span>';
+}
+function batchLine(r){
+  if(!r.batches.length)return '';
+  var acc=0,rej=0,done=0,unt=0;r.batches.forEach(function(b){if(b.state==='accepted')acc++;if(b.state==='rejected')rej++;if(DONE[b.pstate])done++;if(b.untracked)unt++});
+  if(S.phase==='scanned'||S.phase==='scanning')return r.batches.length+' batch(es) of up to '+PAGE;
+  var t=acc+' accepted'+(rej?', <b style="color:var(--bad)">'+rej+' rejected</b>':'')+' of '+r.batches.length;
+  if(acc&&!unt)t+=' · '+done+' process(es) finished';else if(unt)t+=' · process status not available for '+unt+' batch(es), the record count is used instead';
+  return t;
+}
+function renderRes(){
+  var el=$('#res');if(!el)return;
+  if(!S.plan.length){el.innerHTML='';return}
+  var t=totals(),busy=S.phase==='scanning'||S.phase==='deleting'||S.phase==='verifying';
+  var h='<div><h2>'+(S.phase==='scanning'||S.phase==='scanned'?'Records found':'Deletion progress')+'</h2></div><div class="tablewrap"><table class="mx"><thead><tr><th>Object type</th><th style="text-align:right">Records</th><th style="text-align:right">Batches</th><th style="text-align:right">Remaining</th><th>Status</th></tr></thead><tbody>'+
+  S.plan.map(function(r){
+    var pct=r.ids.length&&r.remaining!=null?Math.round((1-r.remaining/r.ids.length)*100):0;
+    var errs=r.batches.filter(function(b){return b.error}).slice(0,3).map(function(b){return '<div class="sub" style="color:var(--bad)">Batch '+b.n+': '+esc(b.error)+'</div>'}).join('');
+    return '<tr><td><b class="mono">'+esc(r.type)+'</b></td><td class="n">'+(r.count==null?'…':fmt(r.count))+'</td><td class="n">'+r.batches.length+'</td><td class="n">'+(r.remaining==null?'…':fmt(r.remaining))+'</td><td>'+rowChip(r)+
+    '<div class="sub">'+batchLine(r)+'</div>'+(S.phase==='deleting'||S.phase==='verifying'||S.phase==='done'?'<div class="bar"><i style="width:'+pct+'%"></i></div>':'')+
+    (r.error?'<div class="sub" style="color:var(--bad)">'+esc(r.error)+'</div>':'')+errs+'</td></tr>';
+  }).join('')+'</tbody></table></div>';
+  if(S.phase==='scanned'){
+    if(t.rec===0)h+='<div class="note">Nothing to delete: every listed object type is already empty'+(S.plan.some(function(r){return r.error})?' or could not be read':'')+'.</div>';
+    else if(S.dry)h+='<div class="note warn"><b>Dry run.</b> '+fmt(t.rec)+' record(s) in '+t.bat+' batch(es) would be deleted. Nothing was sent. Untick “Dry run” above to unlock the deletion.</div>';
+    else{
+      var blocked=S.plan.some(function(r){return r.error&&r.ids.length<r.count});
+      h+='<div class="confirm"><div><b style="color:var(--bad)">This permanently deletes '+fmt(t.rec)+' record(s) in '+t.bat+' batch(es).</b><div class="sub">'+S.plan.filter(function(r){return r.ids.length}).map(function(r){return esc(r.type)+': '+fmt(r.ids.length)}).join(' · ')+'. Brevo has no undo. Associations to these records are removed with them.</div></div>'+
+      (blocked?'<div class="note bad">At least one type was not read completely. Scan again before deleting.</div>':'<div class="row"><input type="text" id="cf" aria-label="Type DELETE to confirm" placeholder="Type DELETE to confirm" autocomplete="off" spellcheck="false" value="'+esc(S.confirm)+'"><button class="btn danger" id="go" data-act="go" '+(S.confirm==='DELETE'?'':'disabled')+'>Delete '+fmt(t.rec)+' records</button></div>')+'</div>';
+    }
+  }
+  if(S.phase==='verifying')h+='<div class="note">Brevo deletes asynchronously. Checking the record count every '+(TICK_MS/1000)+' s for up to '+(VERIFY_MS/60000)+' min. Deletion already sent cannot be cancelled. <button class="btn sm" data-act="stop">Stop watching</button></div>';
+  if(S.phase==='done'){
+    var bad=t.rem>0||S.plan.some(function(r){return r.batches.some(function(b){return b.state==='rejected'})});
+    h+='<div class="note '+(bad?'warn':'')+'" '+(bad?'':'style="background:var(--ok-bg);color:var(--ok)"')+'>'+(bad?'<b>Not fully empty.</b> '+fmt(t.rem)+' record(s) still counted. Brevo may still be processing; scan again in a minute, and a new run deletes whatever is left.':'<b>Done.</b> Every listed object type now counts 0 records.')+'</div>';
+  }
+  el.innerHTML=h;
+}
+function renderRun(){
+  var el=$('#p-run');
+  el.innerHTML='<div class="note warn"><b>Deleting records cannot be undone.</b> Custom objects need an Enterprise plan (beta). Standard Brevo objects (such as contacts) are not supported. The key stays in this tab\'s memory and is never logged in full.</div>'+
+  '<div class="grid2"><div class="field"><label for="key">API key</label><input type="password" id="key" placeholder="xkeysib-..." autocomplete="off" spellcheck="false" value="'+esc(S.key)+'"></div>'+
+  '<div class="field"><label for="types">Object type(s) to empty</label><input type="text" id="types" placeholder="comma-separated object type IDs" autocomplete="off" spellcheck="false" value="'+esc(S.types)+'"></div></div>'+
+  '<p class="muted">Object type IDs are listed in the advanced parameters of each object in Brevo. No endpoint lists them.</p>'+
+  '<label class="radio"><input type="checkbox" id="dry" '+(S.dry?'checked':'')+'> Dry run (read and count only, nothing is deleted)</label>'+
+  '<div class="row"><button class="btn primary" data-act="scan">Scan records</button><button class="btn" data-act="demo">Try with demo data</button><button class="btn" data-act="clear">Clear key and results</button></div><div id="flash" role="status"></div><div id="res" style="display:flex;flex-direction:column;gap:14px"></div>';
+  renderRes();
+}
+function flash(m){var f=$('#flash');if(f){f.textContent=m;setTimeout(function(){if(f.textContent===m)f.textContent=''},4000)}}
+function renderLogs(){
+  var el=$('#p-logs');if(!el)return;var cls={ok:'ok',warn:'warn',error:'bad',info:'info'};
+  el.innerHTML='<div><h2>History</h2><p class="muted">Every request. The key appears only as its last four characters, and record IDs are not logged.</p></div><div class="row"><button class="btn sm" data-act="clearlog">Clear history</button></div>'+
+  (S.logs.length?S.logs.slice().reverse().map(function(l){return '<details class="log"><summary><span class="mono muted">'+l.ts+'</span><span class="chip '+cls[l.level]+'">'+esc(l.status)+'</span><span class="mono">'+esc(l.req)+'</span></summary><pre>'+esc(bodyText(l.body))+'</pre></details>'}).join(''):'<div class="empty">No requests yet.</div>');
+}
+
+/* ---------- demo: simulated account, no network ---------- */
+function demoStart(){
+  function mk(n){var a=[];for(var i=1;i<=n;i++)a.push(100000+i);return a}
+  S.demo=true;S.key='demo';S.types='orders, tickets';S.mock={orders:mk(2450),tickets:mk(40),proc:{},next:9000};
+}
+function mockApi(method,path,body){
+  var m=path.match(/^\/objects\/([^/?]+)\/records\?(.*)$/),q;
+  if(method==='GET'&&m){
+    var t=decodeURIComponent(m[1]);if(!S.mock[t]||t==='proc'||t==='next'||t==='gone')return {ok:false,status:400,data:{message:'invalid object_type'}};
+    q={};m[2].split('&').forEach(function(p){var s=p.split('=');q[s[0]]=s[1]});
+    var lim=parseInt(q.limit,10),pg=parseInt(q.page_num,10),all=S.mock[t].filter(function(id){return !S.mock.gone||!S.mock.gone[id]}),sl=all.slice((pg-1)*lim,pg*lim);
+    return {ok:true,status:200,data:{count:all.length,records:sl.map(function(id){return {identifiers:{id:id},attributes:{}}})}};
+  }
+  m=path.match(/^\/objects\/([^/]+)\/batch\/delete$/);
+  if(method==='POST'&&m){
+    var ids=body&&body.identifiers&&body.identifiers.ids||[];if(ids.length>1000)return {ok:false,status:400,data:{message:'max 1000 ids'}};
+    var pid=S.mock.next++;S.mock.proc[pid]=Date.now()+4000;S.mock.gone=S.mock.gone||{};
+    setTimeout(function(){ids.forEach(function(id){S.mock.gone[id]=1})},4000);
+    return {ok:true,status:202,data:{processId:pid,message:'Batch delete request accepted'}};
+  }
+  m=path.match(/^\/processes\/(\d+)$/);
+  if(method==='GET'&&m){var pid2=+m[1];if(pid2%2===1)return {ok:false,status:404,data:{message:'Process not found (demo: simulates an untracked process)'}};
+    var due=S.mock.proc[pid2];return {ok:true,status:200,data:{id:pid2,status:Date.now()<due?'in_process':'completed'}}}
+  return {ok:false,status:404,data:{message:'Not found (demo)'}};
+}
+
+/* ---------- tabs and events ---------- */
+function showTab(){
+  ['run','logs'].forEach(function(t){$('#p-'+t).hidden=S.tab!==t});
+  document.querySelectorAll('#tabs button').forEach(function(b){b.setAttribute('aria-selected',String(b.dataset.tab===S.tab))});
+  if(S.tab==='logs')renderLogs();
+}
+$('#tabs').addEventListener('click',function(e){var b=e.target.closest('button');if(b){S.tab=b.dataset.tab;showTab()}});
+document.addEventListener('input',function(e){
+  var t=e.target;
+  if(t.id==='key'){S.key=t.value;if(S.demo){S.demo=false}}
+  if(t.id==='types')S.types=t.value;
+  if(t.id==='cf'){S.confirm=t.value;var g=$('#go');if(g)g.disabled=S.confirm!=='DELETE'}
+});
+document.addEventListener('change',function(e){if(e.target.id==='dry'){S.dry=e.target.checked;renderRes()}});
+document.addEventListener('click',function(e){
+  var b=e.target.closest('[data-act]');if(!b)return;var act=b.dataset.act;
+  var busy=S.phase==='scanning'||S.phase==='deleting'||S.phase==='verifying';
+  if(act==='scan'){if(busy){flash('A run is in progress.');return}scan()}
+  else if(act==='go'){if(S.confirm==='DELETE'&&!S.dry&&S.phase==='scanned')destroy()}
+  else if(act==='stop'){S.stop=true}
+  else if(act==='demo'){if(busy)return;demoStart();S.plan=[];S.phase='idle';renderRun();log('info','Demo data loaded','-',0,'Simulated account, no network calls. Untick Dry run to try the deletion.');scan()}
+  else if(act==='clear'){if(busy)S.stop=true;S.key='';S.demo=false;S.mock=null;S.plan=[];S.phase='idle';S.confirm='';renderRun();flash('Key and results cleared from memory.')}
+  else if(act==='clearlog'){S.logs=[];renderLogs()}
+});
+renderRun();renderLogs();showTab();
+})();
+</script></body></html>
