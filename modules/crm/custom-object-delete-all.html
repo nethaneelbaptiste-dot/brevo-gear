@@ -27,11 +27,13 @@ input[type=text],input[type=password]{background:var(--bg);border:1px solid var(
 .confirm{border:2px solid var(--bad);border-radius:8px;padding:14px;display:flex;flex-direction:column;gap:10px}
 .log{border-top:1px solid var(--line);padding:6px 0;font-size:12.5px}.log summary{cursor:pointer;display:flex;gap:10px;flex-wrap:wrap;align-items:center}.log pre{margin:8px 0 4px;padding:10px;background:var(--bg);border:1px solid var(--line);border-radius:6px;white-space:pre-wrap;overflow-wrap:anywhere;font-family:var(--font-mono);font-size:12px;max-height:240px;overflow:auto}
 .empty{padding:28px 12px;text-align:center;color:var(--muted)}#flash{font-size:12.5px;color:var(--ok);min-height:18px}
+.acct{display:grid;grid-template-columns:minmax(120px,1fr) minmax(220px,2fr) minmax(160px,1.6fr) auto;gap:10px;align-items:start;padding:10px 0;border-top:1px solid var(--line)}.acct:first-of-type{border-top:0}.acct input{width:100%}.kw{display:flex;gap:6px;align-items:center}.kw .tail{font-family:var(--font-mono);font-size:12px;background:var(--surface2);border-radius:4px;padding:6px 8px;white-space:nowrap;color:var(--muted)}@media(max-width:760px){.acct{grid-template-columns:1fr 1fr}.kw{grid-column:1/-1}}
+.cool{background:var(--warn-bg);color:var(--warn);border-radius:4px;padding:2px 8px;font-size:12px;font-weight:600;display:inline-block;margin-top:4px}
 .grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr));gap:14px}
 </style></head><body><div class="wrap">
 <header><div><a href="index.html" style="font-size:13px;font-weight:600;color:var(--accent);text-decoration:none">← CRM Models</a>
 <h1>Custom Object Delete All</h1>
-<p class="muted">Empty one or several custom object types of a Brevo account. Brevo deletes at most 1,000 records per call and does it asynchronously, so this tool reads every record ID, sends the batches, then checks the record count until it reaches 0. Dry run by default.</p></div></header>
+<p class="muted">Empty custom object types of one or several Brevo accounts. Brevo deletes at most 1,000 records per call and does it asynchronously, so this tool reads every record ID, sends the batches, then checks the record count until it reaches 0. It slows down by itself when Brevo's rate limit is reached. Dry run by default.</p></div></header>
 <nav role="tablist" id="tabs">
 <button role="tab" data-tab="run" aria-selected="true">1 · Delete records</button>
 <button role="tab" data-tab="logs" aria-selected="false">2 · History</button></nav>
@@ -40,198 +42,268 @@ input[type=text],input[type=password]{background:var(--bg);border:1px solid var(
 <script>
 (function(){
 'use strict';
-var BASE='https://api.brevo.com/v3',PAGE=1000,MAXPAGES=2000,VERIFY_MS=180000,TICK_MS=4000,DONE={completed:1,failed:1,cancelled:1};
+var BASE='https://api.brevo.com/v3',PAGE=1000,MAXPAGES=2000,VERIFY_MS=900000,CONC=3,MAX429=60,DONE={completed:1,failed:1,cancelled:1};
 function $(s){return document.querySelector(s)}
 function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
 function sleep(ms){return new Promise(function(r){setTimeout(r,ms)})}
-function mask(k){return k?'••••'+String(k).slice(-4):''}
+function mask(k){return k?'••••'+String(k).trim().slice(-4):''}
 function fmt(n){return Number(n).toLocaleString('en-US')}
 function chunk(a,n){var o=[];for(var i=0;i<a.length;i+=n)o.push(a.slice(i,i+n));return o}
-var S={tab:'run',key:'',types:'',dry:true,demo:false,mock:null,phase:'idle',plan:[],logs:[],stop:false,confirm:''};
+function dur(ms){var m=Math.round(ms/60000);return m<1?'under a minute':m<90?'about '+m+' min':'about '+(m/60).toFixed(1)+' h'}
+var uid=0;function nid(){return 'a'+(++uid)}
+function newAcct(l){return {id:nid(),label:l||'',key:'',types:'',demo:false,mock:null,calls:0,hold:0,nextAt:0,gap:0,rl:null,limited:false,noProc:false}}
+var S={tab:'run',accounts:[newAcct('Account 1')],dry:true,cap:'',phase:'idle',plan:[],logs:[],stop:false,confirm:''};
 
 /* ---------- logging: key shown as last four characters only, record IDs never logged ---------- */
-function log(level,req,status,ms,body){S.logs.push({ts:new Date().toLocaleTimeString('fr-FR'),level:level,req:req,status:status,ms:ms,body:body});renderLogs()}
+function log(level,acct,req,status,ms,body){S.logs.push({ts:new Date().toLocaleTimeString('fr-FR'),level:level,acct:acct?acct.label||'(unnamed)':'-',req:req,status:status,ms:ms,body:body});if(S.tab==='logs')renderLogs()}
 function bodyText(d){try{var t=typeof d==='string'?d:JSON.stringify(d,null,2);return t.length>3000?t.slice(0,3000)+'\n... truncated':t}catch(e){return String(d)}}
 function errMsg(r){var d=r&&r.data;return (d&&(d.message||d.code))||(typeof d==='string'&&d)||('HTTP '+(r?r.status:'?'))}
+function label(a){return a.label||'(unnamed)'}
 
-/* ---------- API: GET and POST, 429 retry honoring x-sib-ratelimit-reset ---------- */
-async function api(method,path,body){
-  var t0=performance.now(),req=method+' '+path.split('?')[0]+'  (api-key '+mask(S.key)+')';
-  if(S.demo){await sleep(60);var m=mockApi(method,path,body);log(m.ok?'ok':'error',req+' [demo]',m.status,60,summary(m.data));return m}
-  for(var n=0;n<=3;n++){
-    try{
-      var opt={method:method,headers:{'api-key':S.key,'accept':'application/json'}};
-      if(body){opt.headers['content-type']='application/json';opt.body=JSON.stringify(body)}
-      var res=await fetch(BASE+path,opt);
-      if(res.status===429&&n<3){
-        var rs=parseFloat(res.headers.get('x-sib-ratelimit-reset')),w=isFinite(rs)&&rs>0?Math.min(rs*1000+200,15000):2000*Math.pow(2,n)+Math.round(Math.random()*400);
-        log('warn',req,429,Math.round(performance.now()-t0),'Rate limited, waiting '+Math.round(w)+' ms');await sleep(w);continue}
-      var txt=await res.text(),data=txt;try{data=txt?JSON.parse(txt):{}}catch(e){}
-      log(res.ok?'ok':'error',req,res.status,Math.round(performance.now()-t0),res.ok?summary(data):data);
-      return {ok:res.ok,status:res.status,data:data};
-    }catch(e){
-      var msg='Network error (offline, or the page is an embedded Claude artifact whose CSP blocks api.brevo.com). Open this file from Brevo Gear or locally.';
-      log('error',req,'ERR',Math.round(performance.now()-t0),msg);return {ok:false,status:0,data:{message:msg}};
+/* ---------- rate limiting ----------
+   1. Optional pacing: "max calls per hour" spreads calls evenly (one shared clock per account, so parallel batches cannot burst).
+   2. Header throttle: when Brevo reports 2 calls left, the account pauses until the window resets.
+   3. On 429: the whole account pauses (all parallel workers) for x-sib-ratelimit-reset, or a growing backoff when the header is unreadable, then retries.
+   Pauses are visible, cancellable, and nothing is lost: the run resumes where it stopped. */
+function readRl(res){
+  var g=function(n){var v=null;try{v=res.headers.get(n)}catch(e){}return v==null||v===''||isNaN(Number(v))?null:Number(v)};
+  var o={limit:g('x-sib-ratelimit-limit'),remaining:g('x-sib-ratelimit-remaining'),reset:g('x-sib-ratelimit-reset')};o.known=o.limit!=null||o.remaining!=null||o.reset!=null;return o;
+}
+function rlText(o){return o&&o.known?'  [rate limit: '+(o.remaining==null?'?':o.remaining)+'/'+(o.limit==null?'?':o.limit)+' left, reset '+(o.reset==null?'?':o.reset+'s')+']':''}
+async function slot(a){
+  while(!S.stop&&Date.now()<a.hold){a.cool=a.hold;renderRes();await sleep(Math.min(1000,Math.max(50,a.hold-Date.now())))}
+  if(a.cool){a.cool=0;renderRes()}
+  var now=Date.now(),t=Math.max(now,a.nextAt||0);a.nextAt=t+(a.gap||0);if(t>now)await sleep(t-now);
+}
+async function api(a,method,path,body){
+  var req=method+' '+path.split('?')[0]+'  (api-key '+mask(a.key)+')',stopped={ok:false,status:0,data:{message:'Stopped'},stopped:true};
+  for(var n=0;n<=MAX429;n++){
+    if(S.stop)return stopped;
+    await slot(a);if(S.stop)return stopped;
+    var t0=performance.now(),r;a.calls++;
+    if(a.demo){await sleep(40);r=mockApi(a,method,path,body)}
+    else{
+      try{
+        var opt={method:method,headers:{'api-key':a.key,'accept':'application/json'}};
+        if(body){opt.headers['content-type']='application/json';opt.body=JSON.stringify(body)}
+        var res=await fetch(BASE+path,opt),txt=await res.text(),data=txt;try{data=txt?JSON.parse(txt):{}}catch(e){}
+        r={ok:res.ok,status:res.status,data:data,rl:readRl(res)};
+      }catch(e){
+        var msg='Network error (offline, or the page is an embedded Claude artifact whose CSP blocks api.brevo.com). Open this file from Brevo Gear or locally.';
+        log('error',a,req,'ERR',Math.round(performance.now()-t0),msg);return {ok:false,status:0,data:{message:msg}};
+      }
     }
+    var ms=Math.round(performance.now()-t0),rl=r.rl||{};if(rl.known)a.rl=rl;
+    if(r.status===429){
+      var w=rl.reset!=null?Math.min(rl.reset*1000+500,3700000):Math.min(5000*Math.pow(2,Math.min(n,4)),60000);w+=Math.round(Math.random()*500);
+      a.hold=Math.max(a.hold,Date.now()+w);a.limited=true;
+      log('warn',a,req+rlText(rl),429,ms,'Rate limited. Whole account paused '+Math.round(w/1000)+' s, then retry '+(n+1)+'/'+MAX429+(rl.known?' (Brevo asked for '+rl.reset+' s).':' (rate limit headers not readable from the browser, using backoff).'));
+      continue;
+    }
+    if(r.ok&&rl.remaining!=null&&rl.remaining<=2&&rl.reset!=null&&rl.reset>0){
+      a.hold=Math.max(a.hold,Date.now()+rl.reset*1000+300);a.limited=true;
+      log('info',a,'Throttle: '+rl.remaining+' call(s) left, pausing '+rl.reset+' s','-',0,'Staying under the limit reported by Brevo');
+    }
+    log(r.ok?'ok':'error',a,req+rlText(rl)+(a.demo?' [demo]':''),r.status,ms,r.ok?summary(r.data):r.data);
+    return {ok:r.ok,status:r.status,data:r.data};
   }
+  return {ok:false,status:429,data:{message:'Still rate limited after '+MAX429+' retries'}};
 }
 function summary(d){if(d&&d.records)return {count:d.count,records:d.records.length};return d}
+function pool(items,n,fn){var i=0;return Promise.all(Array.from({length:Math.min(n,items.length)},async function(){while(i<items.length&&!S.stop){var x=items[i++];await fn(x)}}))}
 
 /* ---------- step 1: read every record ID of a type (nothing is deleted here) ---------- */
 async function scanType(row){
-  var ids=[],seen={},page=1,total=null;
+  var a=row.a,ids=[],seen={},page=1,total=null;
   while(page<=MAXPAGES&&!S.stop){
     row.status='Reading page '+page+' ('+fmt(ids.length)+' IDs so far)';renderRes();
-    var r=await api('GET','/objects/'+encodeURIComponent(row.type)+'/records?limit='+PAGE+'&page_num='+page+'&association=false');
+    var r=await api(a,'GET','/objects/'+encodeURIComponent(row.type)+'/records?limit='+PAGE+'&page_num='+page+'&association=false');
+    if(r.stopped){row.status='Stopped';return}
     if(!r.ok){row.error=errMsg(r)+' (HTTP '+r.status+')';row.status='Read failed';return}
     var got=r.data.records||[];if(total===null)total=r.data.count==null?got.length:r.data.count;
     got.forEach(function(x){var id=x&&x.identifiers&&x.identifiers.id;if(id!==undefined&&id!==null&&!seen[id]){seen[id]=1;ids.push(id)}});
     if(!got.length||ids.length>=total)break;page++;
   }
   row.count=total||0;row.ids=ids;row.remaining=row.count;
-  row.batches=chunk(ids,PAGE).map(function(c,i){return {n:i+1,ids:c,size:c.length,state:'planned',processId:null,pstate:null,untracked:false,error:null}});
-  row.status=ids.length?'Ready':'Empty';
-  if(ids.length<row.count)row.error='Read '+fmt(ids.length)+' IDs of '+fmt(row.count)+' reported. Scan again before deleting.';
+  row.batches=chunk(ids,PAGE).map(function(c,i){return {n:i+1,ids:c,size:c.length,state:'planned',processId:null,pstate:null,error:null}});
+  row.status=S.stop?'Stopped':ids.length?'Ready':'Empty';
+  if(!S.stop&&ids.length<row.count)row.warn='Read '+fmt(ids.length)+' IDs of '+fmt(row.count)+' reported (records may have changed during the scan). A second run removes what is left.';
 }
+async function scanAccount(a){for(var i=0;i<S.plan.length;i++)if(S.plan[i].a===a)await scanType(S.plan[i])}
+function setGaps(){var c=parseFloat(S.cap);S.accounts.forEach(function(a){a.gap=c>0?3600000/c:0;a.hold=0;a.nextAt=0;a.limited=false;a.noProc=false;a.calls=0;a.cool=0})}
 async function scan(){
-  var types=S.types.split(',').map(function(t){return t.trim()}).filter(Boolean).filter(function(t,i,a){return a.indexOf(t)===i});
-  if(!S.demo&&!S.key.trim()){flash('Enter an API key.');return}
-  if(!types.length){flash('List at least one object type.');return}
-  S.stop=false;S.confirm='';S.phase='scanning';
-  S.plan=types.map(function(t){return {type:t,status:'Waiting',count:null,ids:[],batches:[],remaining:null,error:null}});renderRes();
-  for(var i=0;i<S.plan.length;i++)await scanType(S.plan[i]);
+  var list=S.accounts.filter(function(a){return a.key.trim()||a.demo});
+  if(!list.length){flash('Enter at least one API key.');return}
+  var plan=[];
+  list.forEach(function(a){a.types.split(',').map(function(t){return t.trim()}).filter(Boolean).filter(function(t,i,x){return x.indexOf(t)===i}).forEach(function(t){plan.push({a:a,type:t,status:'Waiting',count:null,ids:[],batches:[],remaining:null,error:null,warn:null})})});
+  if(!plan.length){flash('List at least one object type for an account.');return}
+  S.stop=false;S.confirm='';S.phase='scanning';S.plan=plan;setGaps();renderRes();
+  await Promise.all(list.map(scanAccount));
   S.phase='scanned';renderRes();
 }
 
-/* ---------- step 2: send all batches in parallel (ids only, 1000 max per call) ---------- */
-async function destroy(){
-  var jobs=[];S.phase='deleting';S.stop=false;
-  S.plan.forEach(function(row){row.batches.forEach(function(b){b.state='sending';jobs.push({row:row,b:b})});row.status=row.batches.length?'Sending batches':row.status});renderRes();
-  log('info','Live deletion started','-',0,jobs.length+' batch(es) of up to '+PAGE+' records, sent in parallel.');
-  await Promise.allSettled(jobs.map(async function(j){
-    var r=await api('POST','/objects/'+encodeURIComponent(j.row.type)+'/batch/delete',{identifiers:{ids:j.b.ids}});
-    if(r.ok&&r.data&&r.data.processId!=null){j.b.state='accepted';j.b.processId=r.data.processId}
-    else if(r.ok){j.b.state='accepted'}
+/* ---------- step 2: send the batches (ids only, 1000 max per call), parallel workers, one clock per account ---------- */
+async function destroyAccount(a){
+  var jobs=[];S.plan.forEach(function(row){if(row.a===a)row.batches.forEach(function(b){jobs.push({row:row,b:b})})});
+  await pool(jobs,CONC,async function(j){
+    j.b.state='sending';renderRes();
+    var r=await api(a,'POST','/objects/'+encodeURIComponent(j.row.type)+'/batch/delete',{identifiers:{ids:j.b.ids}});
+    if(r.stopped){j.b.state='planned'}
+    else if(r.ok){j.b.state='accepted';j.b.processId=r.data&&r.data.processId!=null?r.data.processId:null}
     else{j.b.state='rejected';j.b.error=errMsg(r)+' (HTTP '+r.status+')'}
     renderRes();
-  }));
+  });
+}
+async function destroy(){
+  S.phase='deleting';S.stop=false;
+  S.plan.forEach(function(row){if(row.batches.length)row.status='Sending batches'});renderRes();
+  var accts=S.accounts.filter(function(a){return S.plan.some(function(r){return r.a===a&&r.batches.length})});
+  log('info',null,'Live deletion started','-',0,S.plan.reduce(function(s,r){return s+r.batches.length},0)+' batch(es) of up to '+PAGE+' records, '+CONC+' workers per account.');
+  await Promise.all(accts.map(destroyAccount));
   await verify();
 }
 
-/* ---------- step 3: poll processes (best effort) and recount records (authoritative) ---------- */
-async function pollProcess(b){
-  var r=await api('GET','/processes/'+encodeURIComponent(b.processId));
-  if(r.ok&&r.data&&r.data.status){b.pstate=r.data.status;if(r.data.status==='failed'||r.data.status==='cancelled')b.error='Process '+r.data.status+(r.data.info?': '+bodyText(r.data.info):'')}
-  else if(r.status===404||r.status===400){b.untracked=true}
+/* ---------- step 3: sample process status (best effort) and recount records (authoritative) ---------- */
+async function pollSample(a){
+  if(a.noProc)return;
+  var open=[];S.plan.forEach(function(row){if(row.a===a)row.batches.forEach(function(b){if(b.processId!=null&&!DONE[b.pstate])open.push(b)})});
+  for(var i=0;i<Math.min(2,open.length);i++){
+    var b=open[i],r=await api(a,'GET','/processes/'+encodeURIComponent(b.processId));
+    if(r.stopped)return;
+    if(r.ok&&r.data&&r.data.status){b.pstate=r.data.status;if(r.data.status==='failed'||r.data.status==='cancelled')b.error='Process '+r.data.status+(r.data.info?': '+bodyText(r.data.info):'')}
+    else if(r.status===404||r.status===400){a.noProc=true;return}
+  }
 }
 async function recount(row){
-  var r=await api('GET','/objects/'+encodeURIComponent(row.type)+'/records?limit=1&page_num=1&association=false');
-  if(r.ok)row.remaining=r.data.count==null?(r.data.records||[]).length:r.data.count;else row.recountError=errMsg(r);
+  var r=await api(row.a,'GET','/objects/'+encodeURIComponent(row.type)+'/records?limit=1&page_num=1&association=false');
+  if(r.ok)row.remaining=r.data.count==null?(r.data.records||[]).length:r.data.count;
+}
+async function verifyAccount(a){
+  await pollSample(a);
+  for(var i=0;i<S.plan.length;i++){var row=S.plan[i];if(row.a===a&&row.batches.length&&!S.stop){await recount(row);if(row.remaining===0)row.status='Empty';else row.status='Deleting ('+fmt(row.remaining)+' left)';renderRes()}}
 }
 async function verify(){
-  S.phase='verifying';var t0=Date.now();
+  S.phase='verifying';var t0=Date.now(),accts=S.accounts.filter(function(a){return S.plan.some(function(r){return r.a===a&&r.batches.length})});
   while(!S.stop){
-    var work=[];
-    S.plan.forEach(function(row){
-      row.batches.forEach(function(b){if(b.processId!=null&&!b.untracked&&!DONE[b.pstate])work.push(pollProcess(b))});
-      if(row.batches.length)work.push(recount(row));
-    });
-    await Promise.all(work);
-    S.plan.forEach(function(row){if(row.batches.length)row.status=row.remaining===0?'Empty':'Deleting ('+fmt(row.remaining)+' left)'});
-    renderRes();
-    var left=S.plan.reduce(function(s,r){return s+(r.batches.length?(r.remaining||0):0)},0);
-    var rejectedAll=S.plan.every(function(r){return r.batches.every(function(b){return b.state==='rejected'})});
-    if(left===0||rejectedAll)break;
-    if(Date.now()-t0>VERIFY_MS){break}
-    await sleep(TICK_MS);
+    await sleep(S.stop?0:4000);
+    await Promise.all(accts.map(verifyAccount));renderRes();
+    var left=S.plan.reduce(function(s,r){return s+(r.batches.length?(r.remaining==null?1:r.remaining):0)},0);
+    var allRej=S.plan.every(function(r){return r.batches.every(function(b){return b.state==='rejected'})});
+    if(left===0||allRej||Date.now()-t0>VERIFY_MS)break;
+    var slow=accts.some(function(a){return a.limited||a.gap>0});
+    for(var k=0;k<(slow?20:6)&&!S.stop;k++)await sleep(1000);
   }
   S.plan.forEach(function(row){if(row.batches.length)row.status=row.remaining===0?'Empty':(S.stop?'Stopped watching':'Not empty yet')});
   S.phase='done';renderRes();
-  log('info','Run finished','-',0,S.plan.map(function(r){return r.type+': '+(r.remaining==null?'?':r.remaining)+' remaining'}).join('; '));
+  log('info',null,'Run finished','-',0,S.plan.map(function(r){return label(r.a)+' / '+r.type+': '+(r.remaining==null?'?':r.remaining)+' remaining'}).join('; '));
 }
 
 /* ---------- rendering ---------- */
-function totals(){return S.plan.reduce(function(a,r){a.rec+=r.ids.length;a.bat+=r.batches.length;a.rem+=r.remaining||0;return a},{rec:0,bat:0,rem:0})}
+function totals(){return S.plan.reduce(function(t,r){t.rec+=r.ids.length;t.bat+=r.batches.length;t.rem+=r.remaining||0;return t},{rec:0,bat:0,rem:0})}
 function rowChip(r){
-  var s=r.status,c=r.error&&s!=='Ready'?'bad':s==='Empty'?'ok':/^Ready/.test(s)?'warn':/^(Deleting|Reading|Sending)/.test(s)?'info':/failed|Not empty/.test(s)?'bad':'mute';
+  var s=r.status,c=r.error?'bad':s==='Empty'?'ok':/^Ready/.test(s)?'warn':/^(Deleting|Reading|Sending)/.test(s)?'info':/Not empty|Stopped/.test(s)?'bad':'mute';
   return '<span class="chip '+c+'">'+esc(s)+'</span>';
 }
 function batchLine(r){
   if(!r.batches.length)return '';
-  var acc=0,rej=0,done=0,unt=0;r.batches.forEach(function(b){if(b.state==='accepted')acc++;if(b.state==='rejected')rej++;if(DONE[b.pstate])done++;if(b.untracked)unt++});
-  if(S.phase==='scanned'||S.phase==='scanning')return r.batches.length+' batch(es) of up to '+PAGE;
-  var t=acc+' accepted'+(rej?', <b style="color:var(--bad)">'+rej+' rejected</b>':'')+' of '+r.batches.length;
-  if(acc&&!unt)t+=' · '+done+' process(es) finished';else if(unt)t+=' · process status not available for '+unt+' batch(es), the record count is used instead';
-  return t;
+  if(S.phase==='scanning'||S.phase==='scanned')return r.batches.length+' batch(es) of up to '+PAGE;
+  var acc=0,rej=0;r.batches.forEach(function(b){if(b.state==='accepted')acc++;if(b.state==='rejected')rej++});
+  return acc+' accepted'+(rej?', <b style="color:var(--bad)">'+rej+' rejected</b>':'')+' of '+r.batches.length+(r.a.noProc?' · process status not available, the record count is used':'');
+}
+function acctStatus(){
+  var seen={},out='';
+  S.plan.forEach(function(r){var a=r.a;if(seen[a.id])return;seen[a.id]=1;
+    var left=a.cool?Math.max(0,Math.ceil((a.cool-Date.now())/1000)):0;
+    out+='<div class="sub"><b>'+esc(label(a))+'</b> <span class="mono">'+mask(a.key)+'</span> · '+fmt(a.calls)+' API call(s) so far'+(a.rl&&a.rl.limit!=null?' · limit seen: '+a.rl.limit:'')+(left?' <span class="cool">Rate limit reached: paused, resuming in '+(left>=120?Math.round(left/60)+' min':left+' s')+'</span>':'')+'</div>'});
+  return out;
+}
+function estimate(){
+  var bat=S.plan.reduce(function(s,r){return s+r.batches.length},0),c=parseFloat(S.cap),perAcct={};
+  S.plan.forEach(function(r){perAcct[r.a.id]=(perAcct[r.a.id]||0)+r.batches.length});
+  var worst=Math.max.apply(null,Object.keys(perAcct).map(function(k){return perAcct[k]}).concat([0]));
+  return {bat:bat,worst:worst,txt:c>0?'At '+fmt(c)+' calls per hour, the largest account needs '+dur((worst+10)/c*3600000)+' for its delete calls.':''};
 }
 function renderRes(){
   var el=$('#res');if(!el)return;
   if(!S.plan.length){el.innerHTML='';return}
-  var t=totals(),busy=S.phase==='scanning'||S.phase==='deleting'||S.phase==='verifying';
-  var h='<div><h2>'+(S.phase==='scanning'||S.phase==='scanned'?'Records found':'Deletion progress')+'</h2></div><div class="tablewrap"><table class="mx"><thead><tr><th>Object type</th><th style="text-align:right">Records</th><th style="text-align:right">Batches</th><th style="text-align:right">Remaining</th><th>Status</th></tr></thead><tbody>'+
+  var t=totals(),multi=S.accounts.filter(function(a){return S.plan.some(function(r){return r.a===a})}).length>1;
+  var h='<div><h2>'+(S.phase==='scanning'||S.phase==='scanned'?'Records found':'Deletion progress')+'</h2></div>'+(S.phase!=='scanned'||S.plan.some(function(r){return r.a.cool})?'<div>'+acctStatus()+'</div>':'')+
+  '<div class="tablewrap"><table class="mx"><thead><tr><th>Account</th><th>Object type</th><th style="text-align:right">Records</th><th style="text-align:right">Batches</th><th style="text-align:right">Remaining</th><th>Status</th></tr></thead><tbody>'+
   S.plan.map(function(r){
     var pct=r.ids.length&&r.remaining!=null?Math.round((1-r.remaining/r.ids.length)*100):0;
     var errs=r.batches.filter(function(b){return b.error}).slice(0,3).map(function(b){return '<div class="sub" style="color:var(--bad)">Batch '+b.n+': '+esc(b.error)+'</div>'}).join('');
-    return '<tr><td><b class="mono">'+esc(r.type)+'</b></td><td class="n">'+(r.count==null?'…':fmt(r.count))+'</td><td class="n">'+r.batches.length+'</td><td class="n">'+(r.remaining==null?'…':fmt(r.remaining))+'</td><td>'+rowChip(r)+
+    return '<tr><td>'+esc(label(r.a))+'<div class="sub mono">'+mask(r.a.key)+'</div></td><td><b class="mono">'+esc(r.type)+'</b></td><td class="n">'+(r.count==null?'…':fmt(r.count))+'</td><td class="n">'+r.batches.length+'</td><td class="n">'+(r.remaining==null?'…':fmt(r.remaining))+'</td><td>'+rowChip(r)+
     '<div class="sub">'+batchLine(r)+'</div>'+(S.phase==='deleting'||S.phase==='verifying'||S.phase==='done'?'<div class="bar"><i style="width:'+pct+'%"></i></div>':'')+
-    (r.error?'<div class="sub" style="color:var(--bad)">'+esc(r.error)+'</div>':'')+errs+'</td></tr>';
+    (r.error?'<div class="sub" style="color:var(--bad)">'+esc(r.error)+'</div>':'')+(r.warn?'<div class="sub" style="color:var(--warn)">'+esc(r.warn)+'</div>':'')+errs+'</td></tr>';
   }).join('')+'</tbody></table></div>';
+  if(S.phase==='scanning')h+='<div class="note">Scanning. <button class="btn sm" data-act="stop">Stop</button></div>';
   if(S.phase==='scanned'){
-    if(t.rec===0)h+='<div class="note">Nothing to delete: every listed object type is already empty'+(S.plan.some(function(r){return r.error})?' or could not be read':'')+'.</div>';
-    else if(S.dry)h+='<div class="note warn"><b>Dry run.</b> '+fmt(t.rec)+' record(s) in '+t.bat+' batch(es) would be deleted. Nothing was sent. Untick “Dry run” above to unlock the deletion.</div>';
+    var failed=S.plan.filter(function(r){return r.error&&!r.ids.length}).length;
+    if(t.rec===0)h+='<div class="note">Nothing to delete: every listed object type is already empty'+(failed?' or could not be read':'')+'.</div>';
+    else if(S.dry)h+='<div class="note warn"><b>Dry run.</b> '+fmt(t.rec)+' record(s) in '+t.bat+' batch(es) would be deleted'+(multi?' across '+S.accounts.filter(function(a){return S.plan.some(function(r){return r.a===a&&r.ids.length})}).length+' account(s)':'')+'. Nothing was sent. Untick “Dry run” above to unlock the deletion.</div>';
     else{
-      var blocked=S.plan.some(function(r){return r.error&&r.ids.length<r.count});
-      h+='<div class="confirm"><div><b style="color:var(--bad)">This permanently deletes '+fmt(t.rec)+' record(s) in '+t.bat+' batch(es).</b><div class="sub">'+S.plan.filter(function(r){return r.ids.length}).map(function(r){return esc(r.type)+': '+fmt(r.ids.length)}).join(' · ')+'. Brevo has no undo. Associations to these records are removed with them.</div></div>'+
-      (blocked?'<div class="note bad">At least one type was not read completely. Scan again before deleting.</div>':'<div class="row"><input type="text" id="cf" aria-label="Type DELETE to confirm" placeholder="Type DELETE to confirm" autocomplete="off" spellcheck="false" value="'+esc(S.confirm)+'"><button class="btn danger" id="go" data-act="go" '+(S.confirm==='DELETE'?'':'disabled')+'>Delete '+fmt(t.rec)+' records</button></div>')+'</div>';
+      var e=estimate();
+      h+='<div class="confirm"><div><b style="color:var(--bad)">This permanently deletes '+fmt(t.rec)+' record(s) in '+t.bat+' batch(es).</b><div class="sub">'+S.plan.filter(function(r){return r.ids.length}).map(function(r){return esc(label(r.a))+' / '+esc(r.type)+': '+fmt(r.ids.length)}).join(' · ')+'. Brevo has no undo. Associations to these records are removed with them.'+(failed?' '+failed+' type(s) that could not be read are skipped.':'')+'</div>'+(e.txt?'<div class="sub">'+e.txt+'</div>':'')+'</div>'+
+      '<div class="row"><input type="text" id="cf" aria-label="Type DELETE to confirm" placeholder="Type DELETE to confirm" autocomplete="off" spellcheck="false" value="'+esc(S.confirm)+'"><button class="btn danger" id="go" data-act="go" '+(S.confirm==='DELETE'?'':'disabled')+'>Delete '+fmt(t.rec)+' records</button></div></div>';
     }
   }
-  if(S.phase==='verifying')h+='<div class="note">Brevo deletes asynchronously. Checking the record count every '+(TICK_MS/1000)+' s for up to '+(VERIFY_MS/60000)+' min. Deletion already sent cannot be cancelled. <button class="btn sm" data-act="stop">Stop watching</button></div>';
+  if(S.phase==='deleting')h+='<div class="note">Sending batches. <button class="btn sm" data-act="stop">Stop</button> Batches already accepted by Brevo cannot be cancelled.</div>';
+  if(S.phase==='verifying')h+='<div class="note">Brevo deletes asynchronously. Checking the record count every few seconds for up to '+(VERIFY_MS/60000)+' min. Keep this tab open. <button class="btn sm" data-act="stop">Stop watching</button></div>';
   if(S.phase==='done'){
     var bad=t.rem>0||S.plan.some(function(r){return r.batches.some(function(b){return b.state==='rejected'})});
-    h+='<div class="note '+(bad?'warn':'')+'" '+(bad?'':'style="background:var(--ok-bg);color:var(--ok)"')+'>'+(bad?'<b>Not fully empty.</b> '+fmt(t.rem)+' record(s) still counted. Brevo may still be processing; scan again in a minute, and a new run deletes whatever is left.':'<b>Done.</b> Every listed object type now counts 0 records.')+'</div>';
+    h+='<div class="note" '+(bad?'style="background:var(--warn-bg);color:var(--warn)"':'style="background:var(--ok-bg);color:var(--ok)"')+'>'+(bad?'<b>Not fully empty.</b> '+fmt(t.rem)+' record(s) still counted, or a batch was rejected. Brevo may still be processing; scan again in a minute, and a new run deletes whatever is left.':'<b>Done.</b> Every listed object type now counts 0 records.')+'</div>';
   }
   el.innerHTML=h;
 }
 function renderRun(){
   var el=$('#p-run');
-  el.innerHTML='<div class="note warn"><b>Deleting records cannot be undone.</b> Custom objects need an Enterprise plan (beta). Standard Brevo objects (such as contacts) are not supported. The key stays in this tab\'s memory and is never logged in full.</div>'+
-  '<div class="grid2"><div class="field"><label for="key">API key</label><input type="password" id="key" placeholder="xkeysib-..." autocomplete="off" spellcheck="false" value="'+esc(S.key)+'"></div>'+
-  '<div class="field"><label for="types">Object type(s) to empty</label><input type="text" id="types" placeholder="comma-separated object type IDs" autocomplete="off" spellcheck="false" value="'+esc(S.types)+'"></div></div>'+
-  '<p class="muted">Object type IDs are listed in the advanced parameters of each object in Brevo. No endpoint lists them.</p>'+
+  var rows=S.accounts.map(function(a){
+    return '<div class="acct" data-id="'+a.id+'"><input type="text" data-f="label" aria-label="Account name" placeholder="Account name" value="'+esc(a.label)+'">'+
+    '<div class="kw"><input type="password" data-f="key" aria-label="API key" placeholder="xkeysib-..." autocomplete="off" spellcheck="false" value="'+esc(a.key)+'"><span class="tail" id="tl-'+a.id+'" title="Last four characters of the key">'+(a.key.trim()?mask(a.key):'no key')+'</span></div>'+
+    '<input type="text" data-f="types" aria-label="Object types to empty" placeholder="object type IDs, comma-separated" autocomplete="off" spellcheck="false" value="'+esc(a.types)+'"><button class="btn sm" data-act="rm">Remove</button></div>'}).join('');
+  el.innerHTML='<div class="note warn"><b>Deleting records cannot be undone.</b> Custom objects need an Enterprise plan (beta). Standard Brevo objects (such as contacts) are not supported. Keys stay in this tab\'s memory; only their last four characters are shown or logged.</div>'+
+  '<div><h2>Accounts</h2><p class="muted">One v3 API key per Brevo account, with the object types to empty in that account. Object type IDs are in the advanced parameters of each object in Brevo; no endpoint lists them. Accounts run side by side, each with its own rate limit.</p></div><div>'+rows+'</div>'+
+  '<div class="row"><button class="btn" data-act="add">Add account</button></div>'+
+  '<div class="field" style="max-width:420px"><label for="cap">Max API calls per hour, per account (optional)</label><input type="text" id="cap" inputmode="numeric" placeholder="empty = adapt to what Brevo answers" value="'+esc(S.cap)+'"></div>'+
+  '<p class="muted">Brevo\'s <a href="https://developers.brevo.com/docs/api-limits" target="_blank" rel="noopener" style="color:var(--accent)">rate limit page</a> lists 600 calls per hour on the Extended tier for “all other endpoints”, and does not say which tier applies to custom objects. A set value spreads calls evenly so the limit is not reached. Left empty, the tool still pauses by itself on 429 and when Brevo reports the limit is nearly used.</p>'+
   '<label class="radio"><input type="checkbox" id="dry" '+(S.dry?'checked':'')+'> Dry run (read and count only, nothing is deleted)</label>'+
-  '<div class="row"><button class="btn primary" data-act="scan">Scan records</button><button class="btn" data-act="demo">Try with demo data</button><button class="btn" data-act="clear">Clear key and results</button></div><div id="flash" role="status"></div><div id="res" style="display:flex;flex-direction:column;gap:14px"></div>';
+  '<div class="row"><button class="btn primary" data-act="scan">Scan records</button><button class="btn" data-act="demo">Try with demo data</button><button class="btn" data-act="clear">Clear keys and results</button></div><div id="flash" role="status"></div><div id="res" style="display:flex;flex-direction:column;gap:14px"></div>';
   renderRes();
 }
 function flash(m){var f=$('#flash');if(f){f.textContent=m;setTimeout(function(){if(f.textContent===m)f.textContent=''},4000)}}
 function renderLogs(){
   var el=$('#p-logs');if(!el)return;var cls={ok:'ok',warn:'warn',error:'bad',info:'info'};
-  el.innerHTML='<div><h2>History</h2><p class="muted">Every request. The key appears only as its last four characters, and record IDs are not logged.</p></div><div class="row"><button class="btn sm" data-act="clearlog">Clear history</button></div>'+
-  (S.logs.length?S.logs.slice().reverse().map(function(l){return '<details class="log"><summary><span class="mono muted">'+l.ts+'</span><span class="chip '+cls[l.level]+'">'+esc(l.status)+'</span><span class="mono">'+esc(l.req)+'</span></summary><pre>'+esc(bodyText(l.body))+'</pre></details>'}).join(''):'<div class="empty">No requests yet.</div>');
+  el.innerHTML='<div><h2>History</h2><p class="muted">Every request. Keys appear only as their last four characters, and record IDs are not logged.</p></div><div class="row"><button class="btn sm" data-act="clearlog">Clear history</button></div>'+
+  (S.logs.length?S.logs.slice().reverse().map(function(l){return '<details class="log"><summary><span class="mono muted">'+l.ts+'</span><span class="chip '+cls[l.level]+'">'+esc(l.status)+'</span><span>'+esc(l.acct)+'</span><span class="mono">'+esc(l.req)+'</span></summary><pre>'+esc(bodyText(l.body))+'</pre></details>'}).join(''):'<div class="empty">No requests yet.</div>');
 }
 
-/* ---------- demo: simulated account, no network ---------- */
+/* ---------- demo: two simulated accounts, no network. Account B answers 429 now and then. ---------- */
+function mk(n){var x=[];for(var i=1;i<=n;i++)x.push(100000+i);return x}
 function demoStart(){
-  function mk(n){var a=[];for(var i=1;i<=n;i++)a.push(100000+i);return a}
-  S.demo=true;S.key='demo';S.types='orders, tickets';S.mock={orders:mk(2450),tickets:mk(40),proc:{},next:9000};
+  var a=newAcct('Demo A'),b=newAcct('Demo B (rate limited)');
+  a.demo=b.demo=true;a.key='demo0001';b.key='demo0002';
+  a.types='orders, tickets';a.mock={orders:mk(2450),tickets:mk(40),gone:{},proc:{},next:9000,n:0};
+  b.types='bookings';b.mock={bookings:mk(1500),gone:{},proc:{},next:7000,n:0,flaky:true};
+  S.accounts=[a,b];
 }
-function mockApi(method,path,body){
+function mockApi(a,method,path,body){
+  var M=a.mock;M.n++;
+  if(M.flaky&&M.n%7===0)return {ok:false,status:429,data:{message:'Too many requests (demo)'},rl:{limit:600,remaining:0,reset:2,known:true}};
   var m=path.match(/^\/objects\/([^/?]+)\/records\?(.*)$/),q;
   if(method==='GET'&&m){
-    var t=decodeURIComponent(m[1]);if(!S.mock[t]||t==='proc'||t==='next'||t==='gone')return {ok:false,status:400,data:{message:'invalid object_type'}};
+    var t=decodeURIComponent(m[1]);if(!M[t]||/^(gone|proc|next|n|flaky)$/.test(t))return {ok:false,status:400,data:{message:'invalid object_type'}};
     q={};m[2].split('&').forEach(function(p){var s=p.split('=');q[s[0]]=s[1]});
-    var lim=parseInt(q.limit,10),pg=parseInt(q.page_num,10),all=S.mock[t].filter(function(id){return !S.mock.gone||!S.mock.gone[id]}),sl=all.slice((pg-1)*lim,pg*lim);
-    return {ok:true,status:200,data:{count:all.length,records:sl.map(function(id){return {identifiers:{id:id},attributes:{}}})}};
+    var lim=parseInt(q.limit,10),pg=parseInt(q.page_num,10),all=M[t].filter(function(id){return !M.gone[id]});
+    return {ok:true,status:200,data:{count:all.length,records:all.slice((pg-1)*lim,pg*lim).map(function(id){return {identifiers:{id:id},attributes:{}}})}};
   }
   m=path.match(/^\/objects\/([^/]+)\/batch\/delete$/);
   if(method==='POST'&&m){
     var ids=body&&body.identifiers&&body.identifiers.ids||[];if(ids.length>1000)return {ok:false,status:400,data:{message:'max 1000 ids'}};
-    var pid=S.mock.next++;S.mock.proc[pid]=Date.now()+4000;S.mock.gone=S.mock.gone||{};
-    setTimeout(function(){ids.forEach(function(id){S.mock.gone[id]=1})},4000);
+    var pid=M.next++;M.proc[pid]=Date.now()+4000;setTimeout(function(){ids.forEach(function(id){M.gone[id]=1})},4000);
     return {ok:true,status:202,data:{processId:pid,message:'Batch delete request accepted'}};
   }
   m=path.match(/^\/processes\/(\d+)$/);
-  if(method==='GET'&&m){var pid2=+m[1];if(pid2%2===1)return {ok:false,status:404,data:{message:'Process not found (demo: simulates an untracked process)'}};
-    var due=S.mock.proc[pid2];return {ok:true,status:200,data:{id:pid2,status:Date.now()<due?'in_process':'completed'}}}
+  if(method==='GET'&&m){var p2=+m[1];if(!M.proc[p2])return {ok:false,status:404,data:{message:'Process not found (demo)'}};return {ok:true,status:200,data:{id:p2,status:Date.now()<M.proc[p2]?'in_process':'completed'}}}
   return {ok:false,status:404,data:{message:'Not found (demo)'}};
 }
 
@@ -242,10 +314,13 @@ function showTab(){
   if(S.tab==='logs')renderLogs();
 }
 $('#tabs').addEventListener('click',function(e){var b=e.target.closest('button');if(b){S.tab=b.dataset.tab;showTab()}});
+function acctOf(el){var row=el.closest('.acct');return row?S.accounts.filter(function(x){return x.id===row.dataset.id})[0]:null}
 document.addEventListener('input',function(e){
-  var t=e.target;
-  if(t.id==='key'){S.key=t.value;if(S.demo){S.demo=false}}
-  if(t.id==='types')S.types=t.value;
+  var t=e.target,a=acctOf(t);
+  if(a&&t.dataset.f==='label')a.label=t.value;
+  if(a&&t.dataset.f==='types')a.types=t.value;
+  if(a&&t.dataset.f==='key'){a.key=t.value;a.demo=false;var tl=$('#tl-'+a.id);if(tl)tl.textContent=a.key.trim()?mask(a.key):'no key'}
+  if(t.id==='cap')S.cap=t.value;
   if(t.id==='cf'){S.confirm=t.value;var g=$('#go');if(g)g.disabled=S.confirm!=='DELETE'}
 });
 document.addEventListener('change',function(e){if(e.target.id==='dry'){S.dry=e.target.checked;renderRes()}});
@@ -255,8 +330,10 @@ document.addEventListener('click',function(e){
   if(act==='scan'){if(busy){flash('A run is in progress.');return}scan()}
   else if(act==='go'){if(S.confirm==='DELETE'&&!S.dry&&S.phase==='scanned')destroy()}
   else if(act==='stop'){S.stop=true}
-  else if(act==='demo'){if(busy)return;demoStart();S.plan=[];S.phase='idle';renderRun();log('info','Demo data loaded','-',0,'Simulated account, no network calls. Untick Dry run to try the deletion.');scan()}
-  else if(act==='clear'){if(busy)S.stop=true;S.key='';S.demo=false;S.mock=null;S.plan=[];S.phase='idle';S.confirm='';renderRun();flash('Key and results cleared from memory.')}
+  else if(act==='add'){S.accounts.push(newAcct('Account '+(S.accounts.length+1)));renderRun()}
+  else if(act==='rm'){if(busy)return;var a=acctOf(b);S.accounts=S.accounts.filter(function(x){return x!==a});if(!S.accounts.length)S.accounts=[newAcct('Account 1')];S.plan=[];S.phase='idle';renderRun()}
+  else if(act==='demo'){if(busy)return;demoStart();S.plan=[];S.phase='idle';renderRun();log('info',null,'Demo data loaded','-',0,'Two simulated accounts, no network calls. Untick Dry run to try the deletion.');scan()}
+  else if(act==='clear'){if(busy)S.stop=true;S.accounts=[newAcct('Account 1')];S.plan=[];S.phase='idle';S.confirm='';renderRun();flash('Keys and results cleared from memory.')}
   else if(act==='clearlog'){S.logs=[];renderLogs()}
 });
 renderRun();renderLogs();showTab();
