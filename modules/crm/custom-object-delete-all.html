@@ -113,14 +113,24 @@ function summary(d){if(d&&d.records)return {count:d.count,records:d.records.leng
 function pool(items,n,fn){var i=0;return Promise.all(Array.from({length:Math.min(n,items.length)},async function(){while(i<items.length&&!S.stop){var x=items[i++];await fn(x)}}))}
 
 /* ---------- step 1: read every record ID of a type (nothing is deleted here) ---------- */
+var VARS=[{name:'association=false',q:'&association=false'},{name:'association=true',q:'&association=true'},{name:'sort=asc',q:'&association=false&sort=asc'},{name:'association=true&sort=asc',q:'&association=true&sort=asc'}];
 async function scanType(row){
-  var a=row.a,ids=[],exts=[],seen={},page=1,total=null,read=0,noid=0,viaExt=0,shape=null;
+  var a=row.a,ids=[],exts=[],seen={},page=1,total=null,read=0,noid=0,viaExt=0,shape=null,vi=0;
   while(page<=MAXPAGES&&!S.stop){
     row.status='Reading page '+page+' ('+fmt(read)+' records so far)';renderRes();
-    var r=await api(a,'GET','/objects/'+encodeURIComponent(row.type)+'/records?limit='+PAGE+'&page_num='+page+'&association=false');
+    var r=await api(a,'GET','/objects/'+encodeURIComponent(row.type)+'/records?limit='+PAGE+'&page_num='+page+VARS[vi].q);
     if(r.stopped){row.status='Stopped';return}
     if(!r.ok){row.error=errMsg(r)+' (HTTP '+r.status+')';row.status='Read failed';return}
     var got=r.data.records||[];if(total===null)total=r.data.count==null?got.length:r.data.count;
+    /* count says records exist but the list is empty on page 1: try the other documented query variants */
+    while(page===1&&!got.length&&total>0&&vi<VARS.length-1&&!S.stop){
+      vi++;row.status='List empty, trying variant '+VARS[vi].name;renderRes();
+      r=await api(a,'GET','/objects/'+encodeURIComponent(row.type)+'/records?limit='+PAGE+'&page_num=1'+VARS[vi].q);
+      if(r.stopped){row.status='Stopped';return}
+      if(r.ok)got=r.data.records||[];
+    }
+    if(page===1&&!got.length&&total>0){row.variantFail=true}
+    if(page===1&&vi>0&&got.length)row.variant=VARS[vi].name;
     got.forEach(function(x){
       var q=(x&&x.identifiers)||{},id=q.id,ex=q.ext_id;read++;
       if(!shape&&x)shape=Object.keys(x).join(',')+' | identifiers: '+(x.identifiers?Object.keys(x.identifiers).map(function(k){return k+'='+(x.identifiers[k]==null?'null':typeof x.identifiers[k])}).join(', '):'missing');
@@ -139,7 +149,8 @@ async function scanType(row){
     if(viaExt)m.push(fmt(viaExt)+' record(s) have no id and are deleted by ext_id');
     if(noid)m.push(fmt(noid)+' record(s) have neither id nor ext_id and cannot be deleted by this API');
     if(!noid&&!viaExt&&read<row.count)m.push('read '+fmt(read)+' of '+fmt(row.count)+' reported (records may have changed during the scan); a second run removes what is left');
-    if(row.count&&!row.ids.length){row.error='Brevo reports '+fmt(row.count)+' record(s) but none can be targeted.'}
+    if(row.variant)m.unshift('the default list was empty; records were read with '+row.variant);
+    if(row.count&&!row.ids.length){row.error=row.variantFail?'Brevo counts '+fmt(row.count)+' record(s) but the list endpoint returns none, even with association=true and sort=asc. These records can be counted but not listed, so this tool cannot target them.':'Brevo reports '+fmt(row.count)+' record(s) but none can be targeted.'}
     if(m.length)row.warn=m.join('. ')+'.'+(shape&&(noid||row.error)?' First record: '+shape+'.':'');
   }
 }
