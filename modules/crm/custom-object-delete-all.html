@@ -42,7 +42,7 @@ input[type=text],input[type=password]{background:var(--bg);border:1px solid var(
 <script>
 (function(){
 'use strict';
-var BASE='https://api.brevo.com/v3',PAGE=1000,MAXPAGES=2000,VERIFY_MS=900000,CONC=3,MAX429=60,DONE={completed:1,failed:1,cancelled:1};
+var BASE='https://api.brevo.com/v3',PAGE=1000,MAXPAGES=2000,VERIFY_MS=900000,CONC=3,MAX429=12,DONE={completed:1,failed:1,cancelled:1};
 function $(s){return document.querySelector(s)}
 function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
 function sleep(ms){return new Promise(function(r){setTimeout(r,ms)})}
@@ -52,7 +52,7 @@ function chunk(a,n){var o=[];for(var i=0;i<a.length;i+=n)o.push(a.slice(i,i+n));
 function dur(ms){var m=Math.round(ms/60000);return m<1?'under a minute':m<90?'about '+m+' min':'about '+(m/60).toFixed(1)+' h'}
 var uid=0;function nid(){return 'a'+(++uid)}
 function newAcct(l){return {id:nid(),label:l||'',key:'',types:'',demo:false,mock:null,calls:0,hold:0,nextAt:0,gap:0,rl:null,limited:false,noProc:false}}
-var S={tab:'run',accounts:[newAcct('Account 1')],dry:true,cap:'',max:'500000',phase:'idle',plan:[],logs:[],stop:false,confirm:''};
+var S={tab:'run',accounts:[newAcct('Account 1')],dry:true,cap:'',max:'500000',chain:true,wait:'60',pass:1,chainMsg:'',phase:'idle',plan:[],logs:[],stop:false,confirm:''};
 
 /* ---------- logging: key shown as last four characters only, record IDs never logged ---------- */
 function log(level,acct,req,status,ms,body){S.logs.push({ts:new Date().toLocaleTimeString('fr-FR'),level:level,acct:acct?acct.label||'(unnamed)':'-',req:req,status:status,ms:ms,body:body});if(S.tab==='logs')renderLogs()}
@@ -95,9 +95,9 @@ async function api(a,method,path,body){
     }
     var ms=Math.round(performance.now()-t0),rl=r.rl||{};if(rl.known)a.rl=rl;
     if(r.status===429){
-      var w=rl.reset!=null?Math.min(rl.reset*1000+500,3700000):Math.min(5000*Math.pow(2,Math.min(n,4)),60000);w+=Math.round(Math.random()*500);
+      var wm=parseFloat(S.wait);if(!(wm>=0))wm=60;var w=rl.reset!=null?Math.min(rl.reset*1000+500,3700000):Math.round(wm*60000);w+=Math.round(Math.random()*500);
       a.hold=Math.max(a.hold,Date.now()+w);a.limited=true;
-      log('warn',a,req+rlText(rl),429,ms,'Rate limited. Whole account paused '+Math.round(w/1000)+' s, then retry '+(n+1)+'/'+MAX429+(rl.known?' (Brevo asked for '+rl.reset+' s).':' (rate limit headers not readable from the browser, using backoff).'));
+      log('warn',a,req+rlText(rl),429,ms,'Rate limited. Whole account paused '+Math.round(w/1000)+' s, then retry '+(n+1)+'/'+MAX429+(rl.known?' (Brevo asked for '+rl.reset+' s).':' (rate limit headers not readable from the browser, waiting the configured '+wm+' min so the hourly window resets).'));
       continue;
     }
     if(r.ok&&rl.remaining!=null&&rl.remaining<=2&&rl.reset!=null&&rl.reset>0){
@@ -191,6 +191,24 @@ async function destroy(){
   await verify();
 }
 
+/* ---------- chained passes: one confirmation covers every pass until the types are empty ---------- */
+function countSum(){return S.plan.reduce(function(n,r){return n+(r.count||0)},0)}
+async function runChain(){
+  S.pass=1;S.chainMsg='';
+  while(true){
+    var before=countSum();
+    await destroy();
+    if(!S.chain||S.stop)break;
+    var t=totals(),bad=t.rem>0||S.plan.some(function(r){return r.batches.some(function(b){return b.state==='rejected'})});
+    if(!t.beyond)break;
+    if(bad){S.chainMsg='Chaining stopped: the last pass did not finish cleanly (records still counted or a batch was rejected). Check the table, then scan again.';renderRes();break}
+    S.pass++;log('info',null,'Chained pass '+S.pass,'-',0,'Re-scanning after pass '+(S.pass-1)+'; '+fmt(t.beyond)+' record(s) beyond the cap.');
+    await scan();
+    if(S.phase!=='scanned')break;
+    if(totals().rec===0){S.phase='done';renderRes();break}
+    if(countSum()>=before){S.chainMsg='Chaining stopped: the record count did not go down after the last pass. Scan again to retry.';renderRes();break}
+  }
+}
 /* ---------- step 3: sample process status (best effort) and recount records (authoritative) ---------- */
 async function pollSample(a){
   if(a.noProc)return;
@@ -255,7 +273,7 @@ function renderRes(){
   var el=$('#res');if(!el)return;
   if(!S.plan.length){el.innerHTML='';return}
   var t=totals(),multi=S.accounts.filter(function(a){return S.plan.some(function(r){return r.a===a})}).length>1;
-  var h='<div><h2>'+(S.phase==='scanning'||S.phase==='scanned'?'Records found':'Deletion progress')+'</h2></div>'+(S.phase!=='scanned'||S.plan.some(function(r){return r.a.cool})?'<div>'+acctStatus()+'</div>':'')+
+  var h='<div><h2>'+(S.phase==='scanning'||S.phase==='scanned'?'Records found':'Deletion progress')+(S.pass>1?' (pass '+S.pass+')':'')+'</h2></div>'+(S.phase!=='scanned'||S.plan.some(function(r){return r.a.cool})?'<div>'+acctStatus()+'</div>':'')+
   '<div class="tablewrap"><table class="mx"><thead><tr><th>Account</th><th>Object type</th><th style="text-align:right">Records</th><th style="text-align:right">Batches</th><th style="text-align:right">Remaining</th><th>Status</th></tr></thead><tbody>'+
   S.plan.map(function(r){
     var pct=r.ids.length&&r.remaining!=null?Math.max(0,Math.min(100,Math.round((1-Math.max(0,r.remaining-(r.floor||0))/r.ids.length)*100))):0;
@@ -264,6 +282,7 @@ function renderRes(){
     '<div class="sub">'+batchLine(r)+'</div>'+(S.phase==='deleting'||S.phase==='verifying'||S.phase==='done'?'<div class="bar"><i style="width:'+pct+'%"></i></div>':'')+
     (r.error?'<div class="sub" style="color:var(--bad)">'+esc(r.error)+'</div>':'')+(r.warn?'<div class="sub" style="color:var(--warn)">'+esc(r.warn)+'</div>':'')+errs+'</td></tr>';
   }).join('')+'</tbody></table></div>';
+  if(S.chainMsg)h+='<div class="note warn">'+esc(S.chainMsg)+'</div>';
   if(S.phase==='scanning')h+='<div class="note">Scanning. <button class="btn sm" data-act="stop">Stop</button></div>';
   if(S.phase==='scanned'){
     var failed=S.plan.filter(function(r){return r.error&&!r.ids.length}).length;
@@ -271,7 +290,7 @@ function renderRes(){
     else if(S.dry)h+='<div class="note warn"><b>Dry run.</b> '+fmt(t.rec)+' record(s) in '+t.bat+' batch(es) would be deleted'+(multi?' across '+S.accounts.filter(function(a){return S.plan.some(function(r){return r.a===a&&r.ids.length})}).length+' account(s)':'')+'. Nothing was sent. Untick “Dry run” above to unlock the deletion.</div>';
     else{
       var e=estimate();
-      h+='<div class="confirm"><div><b style="color:var(--bad)">This permanently deletes '+fmt(t.rec)+' record(s) in '+t.bat+' batch(es).</b><div class="sub">'+S.plan.filter(function(r){return r.ids.length}).map(function(r){return esc(label(r.a))+' / '+esc(r.type)+': '+fmt(r.ids.length)}).join(' · ')+'. Brevo has no undo. Associations to these records are removed with them.'+(failed?' '+failed+' type(s) that could not be read are skipped.':'')+'</div>'+(e.txt?'<div class="sub">'+e.txt+'</div>':'')+'</div>'+
+      h+='<div class="confirm"><div><b style="color:var(--bad)">This permanently deletes '+fmt(t.rec)+' record(s) in '+t.bat+' batch(es).</b><div class="sub">'+S.plan.filter(function(r){return r.ids.length}).map(function(r){return esc(label(r.a))+' / '+esc(r.type)+': '+fmt(r.ids.length)}).join(' · ')+'. Brevo has no undo. Associations to these records are removed with them.'+(S.chain&&t.beyond?' <b>Chained passes are on:</b> about '+fmt(t.beyond)+' more record(s) follow, and after this pass the tool re-scans and keeps deleting by itself until every type is empty. This confirmation covers all passes. Stop ends it at any time.':'')+(failed?' '+failed+' type(s) that could not be read are skipped.':'')+'</div>'+(e.txt?'<div class="sub">'+e.txt+'</div>':'')+'</div>'+
       '<div class="row"><input type="text" id="cf" aria-label="Type DELETE to confirm" placeholder="Type DELETE to confirm" autocomplete="off" spellcheck="false" value="'+esc(S.confirm)+'"><button class="btn danger" id="go" data-act="go" '+(S.confirm==='DELETE'?'':'disabled')+'>Delete '+fmt(t.rec)+' records</button></div></div>';
     }
   }
@@ -294,8 +313,11 @@ function renderRun(){
   '<div class="row"><button class="btn" data-act="add">Add account</button></div>'+
   '<div class="field" style="max-width:420px"><label for="cap">Max API calls per hour, per account (optional)</label><input type="text" id="cap" inputmode="numeric" placeholder="empty = adapt to what Brevo answers" value="'+esc(S.cap)+'"></div>'+
   '<p class="muted">Brevo\'s <a href="https://developers.brevo.com/docs/api-limits" target="_blank" rel="noopener" style="color:var(--accent)">rate limit page</a> lists 600 calls per hour on the Extended tier for “all other endpoints”, and does not say which tier applies to custom objects. A set value spreads calls evenly so the limit is not reached. Left empty, the tool still pauses by itself on 429 and when Brevo reports the limit is nearly used.</p>'+
+  '<div class="field" style="max-width:420px"><label for="wt">Wait after a rate limit (minutes)</label><input type="text" id="wt" inputmode="decimal" placeholder="60" value="'+esc(S.wait)+'"></div>'+
+  '<p class="muted">When Brevo answers 429 and does not say when to retry (the browser often cannot read those headers), the whole account stops for this long, then the next batch is sent. 60 matches the hourly window. If Brevo does report a reset time, that time is used instead.</p>'+
   '<div class="field" style="max-width:420px"><label for="mx">Max records per object type, per pass</label><input type="text" id="mx" inputmode="numeric" placeholder="500000 (empty = no limit)" value="'+esc(S.max)+'"></div>'+
-  '<p class="muted">The scan stops reading at this number and the deletion starts there, so a very large object does not use up the API rate limit before anything is deleted. When a pass ends, scan again for the next one.</p>'+
+  '<p class="muted">The scan stops reading at this number and the deletion starts there, so a very large object does not use up the API rate limit before anything is deleted. When a pass ends, scan again for the next one, or let the tool chain the passes:</p>'+
+  '<label class="radio"><input type="checkbox" id="chain" '+(S.chain?'checked':'')+'> Chain passes: after the typed DELETE, keep scanning and deleting until every type is empty (stops on any error or if the count does not go down)</label>'+
   '<label class="radio"><input type="checkbox" id="dry" '+(S.dry?'checked':'')+'> Dry run (read and count only, nothing is deleted)</label>'+
   '<div class="row"><button class="btn primary" data-act="scan">Scan records</button><button class="btn" data-act="demo">Try with demo data</button><button class="btn" data-act="clear">Clear keys and results</button></div><div id="flash" role="status"></div><div id="res" style="display:flex;flex-direction:column;gap:14px"></div>';
   renderRes();
@@ -352,14 +374,15 @@ document.addEventListener('input',function(e){
   if(a&&t.dataset.f==='key'){a.key=t.value;a.demo=false;var tl=$('#tl-'+a.id);if(tl)tl.textContent=a.key.trim()?mask(a.key):'no key'}
   if(t.id==='cap')S.cap=t.value;
   if(t.id==='mx')S.max=t.value;
+  if(t.id==='wt')S.wait=t.value;
   if(t.id==='cf'){S.confirm=t.value;var g=$('#go');if(g)g.disabled=S.confirm!=='DELETE'}
 });
-document.addEventListener('change',function(e){if(e.target.id==='dry'){S.dry=e.target.checked;renderRes()}});
+document.addEventListener('change',function(e){if(e.target.id==='dry'){S.dry=e.target.checked;renderRes()}if(e.target.id==='chain'){S.chain=e.target.checked;renderRes()}});
 document.addEventListener('click',function(e){
   var b=e.target.closest('[data-act]');if(!b)return;var act=b.dataset.act;
   var busy=S.phase==='scanning'||S.phase==='deleting'||S.phase==='verifying';
   if(act==='scan'){if(busy){flash('A run is in progress.');return}scan()}
-  else if(act==='go'){if(S.confirm==='DELETE'&&!S.dry&&S.phase==='scanned')destroy()}
+  else if(act==='go'){if(S.confirm==='DELETE'&&!S.dry&&S.phase==='scanned')runChain()}
   else if(act==='stop'){S.stop=true}
   else if(act==='add'){S.accounts.push(newAcct('Account '+(S.accounts.length+1)));renderRun()}
   else if(act==='rm'){if(busy)return;var a=acctOf(b);S.accounts=S.accounts.filter(function(x){return x!==a});if(!S.accounts.length)S.accounts=[newAcct('Account 1')];S.plan=[];S.phase='idle';renderRun()}
