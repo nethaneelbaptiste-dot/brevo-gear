@@ -16,7 +16,7 @@ nav button[aria-selected="true"]{color:var(--fg);border-bottom-color:var(--accen
 button,input,textarea{font:inherit;color:var(--fg)}
 .btn{background:var(--surface2);border:1px solid var(--line);border-radius:6px;padding:8px 14px;cursor:pointer;font-weight:500}.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}.btn:disabled{opacity:.45;cursor:not-allowed}.btn.sm{padding:4px 10px;font-size:12.5px}
 select{font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:6px 8px}
-input[type=text],input[type=password],textarea{background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:8px 10px;min-width:0}input[type=password]{font-family:var(--font-mono)}
+input[type=text],input[type=password],input[type=number],textarea{background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:8px 10px;min-width:0}input[type=password]{font-family:var(--font-mono)}
 .erd{overflow:auto;border:1px solid var(--line);border-radius:8px;background:var(--bg);padding:8px;max-height:760px}.erd svg{display:block}
 .e-box{fill:var(--surface);stroke:var(--line)}.e-ghost{fill:var(--surface);stroke:var(--muted);stroke-dasharray:4 3}.e-head{fill:var(--surface2)}.e-head.bad{fill:var(--bad-bg)}
 .e-title{font:600 13px var(--font-body);fill:var(--fg)}.e-sub{font:11px var(--font-body);fill:var(--muted)}.e-sub.bad{fill:var(--bad);font-weight:600}
@@ -49,13 +49,13 @@ textarea{width:100%;min-height:220px;font-family:var(--font-mono);font-size:12px
 <script>
 (function(){
 'use strict';
-var BASE='https://api.brevo.com/v3',SAMPLE=1000,MAXPAGES=3;
+var BASE='https://api.brevo.com/v3',SAMPLE=1000,DEFAULT_MAX=3000,HARD_MAX=50000;
 function $(s){return document.querySelector(s)}
 function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
 function sleep(ms){return new Promise(function(r){setTimeout(r,ms)})}
 function mask(k){return k?'••••'+String(k).slice(-4):''}
 var uid=0;function nid(){return 'a'+(++uid)}
-var S={tab:'accounts',accounts:[],types:'',cmp:null,logs:[],erdT:'',erdDiff:false};
+var S={tab:'accounts',accounts:[],types:'',maxRecords:DEFAULT_MAX,cmp:null,logs:[],erdT:'',erdDiff:false};
 function newAcct(l,m){return {id:nid(),label:l||'',key:'',isModel:!!m,status:'idle',info:'',model:null,demo:false,mock:null}}
 S.accounts=[newAcct('Model account',true),newAcct('Target 1',false)];
 
@@ -122,13 +122,14 @@ function inferType(recs,type){
   return out;
 }
 async function loadType(a,type){
-  var recs=[],page=1,total=null;
-  while(page<=MAXPAGES){
+  var recs=[],page=1,total=null,maxPages=Math.ceil(S.maxRecords/SAMPLE);
+  while(page<=maxPages){
     var r=await apiGet(a,'/objects/'+encodeURIComponent(type)+'/records?limit='+SAMPLE+'&page_num='+page+'&association=true');
     if(!r.ok)return {error:(r.data&&r.data.message)||('HTTP '+r.status)};
     var got=r.data.records||[];if(total===null)total=r.data.count==null?got.length:r.data.count;
     recs=recs.concat(got);if(!got.length||recs.length>=total)break;page++;
   }
+  if(recs.length>S.maxRecords)recs=recs.slice(0,S.maxRecords);
   var m=inferType(recs,type);m.total=total;return m;
 }
 async function loadAll(){
@@ -189,7 +190,7 @@ function build(){
       variants.push({type:t,a:ks[i],aa:nm[ks[i]],b:ks[j],bb:nm[ks[j]],s:s});
     }
   });
-  S.cmp={model:model,targets:targets,rows:rows,variants:variants};
+  S.cmp={model:model,targets:targets,rows:rows,variants:variants,sample:S.maxRecords};
 }
 var ISSUE={similar:['probable match','info'],missing:['attribute missing','bad'],type:['type differs','warn'],extra:['target-only','mute'],'assoc-missing':['association missing','bad']};
 
@@ -254,7 +255,7 @@ function renderCompare(){
   var el=$('#p-compare');
   if(!S.cmp){el.innerHTML='<div class="empty">Load at least two accounts first.</div>';return}
   var c=S.cmp;
-  el.innerHTML='<div><h2>Model: '+esc(c.model.label)+'</h2><p class="muted">Attributes and types are inferred from the first '+(SAMPLE*MAXPAGES)+' records per object type. See the limits in the checklist tab.</p></div>'+erdHtml()+variantsHtml()+'<div><h2>Differences by object type</h2></div>'+
+  el.innerHTML='<div><h2>Model: '+esc(c.model.label)+'</h2><p class="muted">Attributes and types are inferred from the first '+(c.sample||S.maxRecords)+' records per object type. See the limits in the checklist tab.</p></div>'+erdHtml()+variantsHtml()+'<div><h2>Differences by object type</h2></div>'+
   '<div class="tablewrap"><table class="mx"><thead><tr><th>Object type</th><th>Model</th>'+c.targets.map(function(t){return '<th>'+esc(t.label)+'</th>'}).join('')+'</tr></thead><tbody>'+
   c.rows.map(function(r){
     var m=r.m.error?'<span class="chip bad">unreadable</span><div class="sub">'+esc(r.m.error)+'</div>':'<b class="mono">'+esc(r.type)+'</b><div class="sub">'+Object.keys(r.m.attrs).length+' attributes seen, '+r.m.total+' records, assoc: '+(r.m.assoc.join(', ')||'none seen')+'</div>';
@@ -287,7 +288,7 @@ function report(){
     if(!n)out.push('Nothing to create.');out.push('');
   });
   if(c.variants.length){out.push('## Naming variants across accounts (probable matches)','');c.variants.forEach(function(x){out.push('- `'+x.type+'`: `'+x.a+'` ('+x.aa.join(', ')+') ≈ `'+x.b+'` ('+x.bb.join(', ')+'), '+Math.round(x.s*100)+'%: pick one spelling')});out.push('')}
-  out.push('## Limits of this inference','','- Only the first 3000 records of each type are read, and only attributes that have a value in them are seen. Empty attributes are invisible.','- Category attributes cannot be told from text in the data, and naming conventions are not used to guess (they differ between accounts and teams). Values listed are only those seen in the sampled records, not the accepted options. Read the exact type and options in Settings > Custom objects.','- Primary attribute, attribute order and the direction of associations (one-to-many, many-to-many) are not available.','- Object types must be listed by hand: no endpoint lists them.');
+  out.push('## Limits of this inference','','- Only the first '+(c.sample||S.maxRecords)+' records of each type are read, and only attributes that have a value in them are seen. Empty attributes are invisible.','- Category attributes cannot be told from text in the data, and naming conventions are not used to guess (they differ between accounts and teams). Values listed are only those seen in the sampled records, not the accepted options. Read the exact type and options in Settings > Custom objects.','- Primary attribute, attribute order and the direction of associations (one-to-many, many-to-many) are not available.','- Object types must be listed by hand: no endpoint lists them.');
   return out.join('\n');
 }
 function renderReport(){
@@ -309,6 +310,8 @@ function renderAccounts(){
   '<div><h2>Accounts</h2><p class="muted">One v3 API key per account, and the model account.</p></div><div>'+rows+'</div><div class="row"><button class="btn sm" data-act="add">Add account</button></div>'+
   '<div><h2>Object types to compare</h2><p class="muted">Comma-separated object type IDs (as in the Advanced parameters of the object). No endpoint lists them.</p></div>'+
   '<input type="text" id="types" aria-label="Object types" placeholder="vehicle, garage" value="'+esc(S.types)+'">'+
+  '<div><h2>Records to read per object type</h2><p class="muted">Attributes are inferred from the first records of each type. Reading more finds attributes filled only later, but takes one request per 1,000 records, per type and account. Default '+DEFAULT_MAX+', maximum '+HARD_MAX+'.</p></div>'+
+  '<input type="number" id="maxrec" aria-label="Records to read per object type" min="1000" max="'+HARD_MAX+'" step="1000" value="'+S.maxRecords+'" style="max-width:160px">'+
   '<div class="row"><button class="btn primary" data-act="load">Load models and compare</button><button class="btn" data-act="demo">Try with demo data</button><button class="btn" data-act="clear">Clear keys</button></div><div id="flash" role="status"></div>';
 }
 function flash(m){var f=$('#flash');if(f){f.textContent=m;setTimeout(function(){if(f.textContent===m)f.textContent=''},4000)}}
@@ -344,6 +347,7 @@ document.addEventListener('input',function(e){
   var t=e.target,row=t.closest('.acct');
   if(row){var a=S.accounts.filter(function(x){return x.id===row.dataset.id})[0];if(a&&t.dataset.f==='label')a.label=t.value;if(a&&t.dataset.f==='key')a.key=t.value}
   if(t.id==='types')S.types=t.value;
+  if(t.id==='maxrec'){var n=parseInt(t.value,10);if(n>0)S.maxRecords=Math.min(Math.max(n,1),HARD_MAX)}
 });
 document.addEventListener('change',function(e){var t=e.target;if(t.id==='erdt'){S.erdT=t.value;renderCompare()}if(t.id==='erdd'){S.erdDiff=t.checked;renderCompare()}if(t.dataset&&t.dataset.f==='model'){var id=t.closest('.acct').dataset.id;S.accounts.forEach(function(a){a.isModel=a.id===id})}});
 function copy(txt,ta){if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(txt).then(function(){},function(){})}else if(ta){ta.select()}}
